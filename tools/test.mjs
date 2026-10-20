@@ -21,6 +21,8 @@ function runBot(def, power) {
     const foe = G.enemies.some((e) => e.alive && e.active && Math.hypot(e.x + e.w / 2 - cx, e.z + e.d / 2 - cz) < 2.8 && (e.x - h.x) * dx + (e.z - h.z) * dz > 0 && Math.abs(e.y - h.y) < 2.5 && !(e.kind === 'koopa' && e.state === 'shell'));
     let press = false;
     if (h.onGround && s.hold <= 0 && (wall || gap || foe)) { press = true; s.hold = 0.5; }
+    // in the water: stroke whenever it sinks below cruising depth or meets a wall
+    if (h.swimming && s.hold <= 0 && (h.y < 9.5 || wall) && h.vy < 1) { press = true; s.hold = 0.3; }
     s.hold -= DT;
     step(G, { ...NONE, mx: dx, mz: dz, run: true, jump: s.hold > 0, jumpPressed: press }, DT);
     if (h.dead || G.lava) return { G, why: G.lava ? 'lava' : G.fell ? 'fell' : 'died', x: h.x, z: h.z };
@@ -32,10 +34,10 @@ function runBot(def, power) {
 }
 
 // ---- the map and the levels
-ok('every level on the map exists', MAP.nodes.filter((n) => n.kind !== 'start' && n.kind !== 'house').every((n) => LEVELS[n.id]));
+ok('every level on the map exists', MAP.nodes.filter((n) => n.kind !== 'start' && n.kind !== 'house' && n.kind !== 'spade').every((n) => LEVELS[n.id]));
 for (const def of Object.values(LEVELS)) {
   const [sx, sy, sz] = def.start;
-  ok(`${def.id} has a goal or a boss, and room to start`, (!!def.goal || def.ents.some((e) => e.t === 'B' || e.t === 'K')) && !isSolid(tileAt(def, sx, sy, sz)) && isSolid(tileAt(def, sx, sy - 1, sz)));
+  ok(`${def.id} has a goal or a boss, and room to start`, (!!def.goal || def.ents.some((e) => 'BKJ'.includes(e.t))) && !isSolid(tileAt(def, sx, sy, sz)) && isSolid(tileAt(def, sx, sy - 1, sz)));
   for (const power of [0, 1]) {
     const r = runBot(def, power);
     ok(`${def.id} can be finished (${power ? 'big' : 'small'})`, r.done, r.done ? `${r.t.toFixed(0)} s${r.arena ? ', reached the boss' : ''}` : `${r.why} at x ${r.x.toFixed(1)} z ${r.z.toFixed(1)}`);
@@ -100,6 +102,36 @@ const run = (G, secs, inp = NONE, every) => { const evs = []; for (let i = 0; i 
     for (let n = 0; n < 12 && !G.bossDown; n++) { const b = G.enemies.find((e) => e.kind === 'boss'); if (!b) break; G.hero.x = b.x + 0.3; G.hero.z = b.z + 0.3; G.hero.y = b.y + b.h + 2; G.hero.vy = -6; G.hero.prevY = G.hero.y; run(G, 1.3); }
     ok(`the ${t === 'B' ? 'fortress brute' : 'Turtle King'} falls to three stomps`, G.bossDown && G.cleared === 'star');
   }
+}
+// ---- the suits: tanooki, frog, the P-wing, water, cannons, the prince
+{
+  const sea = flat(60, 10, (d) => { for (let y = 2; y <= 10; y++) for (let z = 0; z < 10; z++) for (let x = 0; x < 60; x++) put(d, x, y, z, T.WATER); });
+  const swimDist = (power) => { const G = newRun(sea, { power }); G.hero.y = 5; run(G, 2, { ...NONE, mx: 1 }, (g, i) => { if (i % 30 === 0) g.hero.vy = Math.max(g.hero.vy, 0); }); return G.hero.x - 2; };
+  const plain = swimDist(0), frog = swimDist(5);
+  ok('the frog suit swims about twice as fast', frog > plain * 1.7, `${frog.toFixed(1)} vs ${plain.toFixed(1)} blocks in 2 s`);
+  const F = newRun(sea, { power: 5 }); F.hero.y = 4; run(F, 1, { ...NONE, jump: true }); const up = F.hero.y;
+  ok('the frog swims up while jump is held, and does not sink', up > 7, `y ${up.toFixed(1)}`);
+  const S = newRun(sea); S.hero.y = 9; run(S, 1.5); ok('without a suit you sink slowly in water', S.hero.y < 8 && S.hero.y > 2, `y ${S.hero.y.toFixed(1)}`);
+  const L1 = newRun(flat(60)); setPower(L1.hero, 5); const ev = run(L1, 1, { ...NONE, mx: 1 }); ok('on land the frog hops along slowly', L1.hero.x - 2 < 5 && ev.some((e) => e.t === 'hop'), `${(L1.hero.x - 2).toFixed(1)} blocks in 1 s`);
+}
+{
+  const def = flat(); def.ents = [{ t: 'g', x: 6, y: 2, z: 4 }];
+  const G = newRun(def, { power: 4 }); G.hero.x = 3; G.hero.z = 4.1; const ev = run(G, 3, { ...NONE, pound: true });
+  ok('the tanooki statue cannot be hurt', G.hero.power === 4 && !G.hero.dead && ev.some((e) => e.t === 'statue'));
+  const T2 = newRun(flat(160), { power: 4 }); run(T2, 1.6, { ...NONE, mx: 1, run: true }); let top = 0;
+  for (let i = 0; i < 12; i++) run(T2, 0.25, { ...NONE, mx: 1, run: true, jump: true, jumpPressed: true }, (g) => { top = Math.max(top, g.hero.y); });
+  ok('the tanooki suit flies like the leaf', top > 9, `${top.toFixed(1)} up`);
+  const P = newRun(flat(400), { power: 0, pwing: true }); let ptop = 0; run(P, 0.2, { ...NONE, mx: 1 });
+  for (let i = 0; i < 40; i++) run(P, 0.25, { ...NONE, mx: 1, jump: true, jumpPressed: true }, (g) => { ptop = Math.max(ptop, g.hero.y); });
+  ok('the P-wing gives a tail and flight that never runs out (up to the top of the level)', P.hero.power === 3 && P.hero.y > 12 && ptop < 20, `still at ${P.hero.y.toFixed(1)} after 10 s`);
+}
+{
+  const def = flat(40, 10, (d) => put(d, 20, 2, 4, T.CANNON)); const G = newRun(def); G.hero.x = 10; G.hero.z = 4.1; let fired = false;
+  run(G, 5, NONE, (g) => { if (g.shots.some((s) => s.kind === 'ball')) fired = true; });
+  ok('a cannon fires balls at you', fired);
+  const B = flat(40); B.ents = [{ t: 'J', x: 20, y: 2, z: 4 }]; const J = newRun(B); setPower(J.hero, 1); J.god = true; let rings = false;
+  for (let n = 0; n < 12 && !J.bossDown; n++) { const b = J.enemies.find((e) => e.kind === 'boss'); if (!b) break; J.hero.x = b.x + 0.2; J.hero.z = b.z + 0.2; J.hero.y = b.y + b.h + 2; J.hero.vy = -6; J.hero.prevY = J.hero.y; run(J, 1.3, NONE, (g) => { if (g.shots.some((s) => s.kind === 'ring')) rings = true; }); }
+  ok('the prince throws magic rings and falls to three stomps', rings && J.bossDown);
 }
 console.log(fails ? `${fails} FAILED` : 'all passed');
 process.exit(fails ? 1 : 0);

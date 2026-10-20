@@ -2,10 +2,10 @@
 // x runs along the course, z is depth (side to side), y counts up; plain ground is two blocks deep (you stand at y = 2).
 import { T } from './game.js';
 
-const CH = { X: T.GROUND, B: T.BRICK, '?': T.QCOIN, L: T.QLEAF, F: T.QFLOWER, '1': T.Q1UP, U: T.USED, H: T.HARD, '-': T.CLOUD, N: T.NOTE, v: T.LAVA, o: T.COIN, S: T.STONE, '.': T.EMPTY };
+const CH = { X: T.GROUND, B: T.BRICK, '?': T.QCOIN, L: T.QLEAF, F: T.QFLOWER, '1': T.Q1UP, T: T.QTANOOKI, R: T.QFROG, U: T.USED, H: T.HARD, '-': T.CLOUD, N: T.NOTE, v: T.LAVA, o: T.COIN, S: T.STONE, C: T.CANNON, P: T.PLANK, '.': T.EMPTY };
 function level(id, name, theme, w, d, h, build) {
   const tiles = new Uint8Array(w * h * d), ents = [], mid = Math.floor(d / 2);
-  const lv = { id, name, theme, w, h, d, tiles, ents, start: [2, 2, mid], goal: null, check: null, path: [], camYaw: 0, arena: null, pipes: [] };
+  const lv = { id, name, theme, w, h, d, tiles, ents, start: [2, 2, mid], goal: null, check: null, path: [], camYaw: 0, arena: null, pipes: [], waters: [] };
   const set = (x, y, z, t) => { if (x >= 0 && x < w && y >= 0 && y < h && z >= 0 && z < d) tiles[(y * d + z) * w + x] = t; };
   const fill = (x0, y0, z0, x1, y1, z1, t) => { for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) set(x, y, z, t); };
   const stone = theme === 'fort' || theme === 'castle';
@@ -14,6 +14,8 @@ function level(id, name, theme, w, d, h, build) {
     // a slab of ground, solid from the bottom up to top - 1
     ground: (x0, x1, z0 = 0, z1 = d - 1, top = 2, t = stone || theme === 'cave' ? T.STONE : T.GROUND) => fill(x0, 0, z0, x1, top - 1, z1, t),
     hole: (x0, x1, z0 = 0, z1 = d - 1) => fill(x0, 0, z0, x1, h - 1, z1, T.EMPTY),
+    // a body of water (only where nothing solid is), remembered so it can be drawn as one
+    water: (x0, y0, z0, x1, y1, z1) => { for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) if (tiles[(y * d + z) * w + x] === T.EMPTY) set(x, y, z, T.WATER); lv.waters.push([x0, y0, z0, x1, y1, z1]); },
     lava: (x0, x1, z0 = 0, z1 = d - 1) => { fill(x0, 0, z0, x1, h - 1, z1, T.EMPTY); fill(x0, 0, z0, x1, 0, z1, T.LAVA); },
     row: (x, y, z, s, axis = 'x') => [...s].forEach((c, i) => { if (c !== ' ') { if (axis === 'x') set(x + i, y, z, CH[c]); else set(x, y, z + i, CH[c]); } }),
     // a pipe two blocks square and hgt tall, standing on the ground at base (with a biting plant inside, maybe)
@@ -83,7 +85,7 @@ export const LEVELS = {
     b.pipe(12, m - 1, 2); b.pipe(18, 2, 3, true); b.pipe(18, 8, 3, true); b.e('g', 24, m); b.pipe(28, m - 1, 2, true); b.row(32, 6, m, '?F?'); b.e('g', 36, 3);
     b.pipe(40, m - 1, 3); b.coins(40, 6, m, 2); b.pipe(46, 1, 3, true); b.pipe(46, 9, 3, true); b.e('k', 52, m);
     b.check(58);
-    b.pipe(62, m - 1, 2, true); b.pipe(68, 3, 3); b.pipe(68, 7, 3); b.e('w', 74, m); b.pipe(80, m - 1, 2, true); b.row(84, 6, m, 'BLB');
+    b.pipe(62, m - 1, 2, true); b.pipe(68, 3, 3); b.pipe(68, 7, 3); b.e('w', 74, m); b.pipe(80, m - 1, 2, true); b.row(84, 6, m, 'BTB');
     b.pipe(90, m - 1, 3, true); b.pipe(96, m - 1, 3); b.coins(96, 7, m, 2); b.e('g', 102, 4); b.e('g', 103, 7);
     b.pipe(108, m - 1, 2, true); b.e('k', 114, m);
     b.stairs(118, 0, 11, 3); b.goal(125);
@@ -116,17 +118,35 @@ export const LEVELS = {
     b.fill(17, 1, 3, 19, 1, 6, T.CLOUD); b.fill(24, 2, 3, 27, 2, 6, T.NOTE); b.coins(24, 9, m, 4); b.e('w', 30, m); b.fill(33, 1, 3, 35, 1, 6, T.CLOUD);
     b.row(40, 6, m, '?L?'); b.e('k', 45, m); b.fill(51, 1, 3, 52, 1, 6, T.CLOUD); b.e('w', 60, 3); b.e('w', 66, 6); b.fill(58, 9, 3, 63, 9, 6, T.CLOUD); b.coins(58, 10, m, 6);
     b.check(78); b.fill(73, 1, 3, 75, 1, 6, T.CLOUD); b.fill(82, 2, 2, 86, 2, 7, T.NOTE); b.coins(82, 10, m, 5); b.e('g', 90, m);
-    b.fill(93, 1, 3, 94, 1, 6, T.CLOUD); b.e('k', 102, m); b.row(106, 6, m, 'BFB'); b.fill(113, 1, 3, 114, 1, 6, T.CLOUD); b.e('w', 122, m); b.e('w', 127, 3);
+    b.fill(93, 1, 3, 94, 1, 6, T.CLOUD); b.e('k', 102, m); b.row(106, 6, m, 'BTB'); b.fill(113, 1, 3, 114, 1, 6, T.CLOUD); b.e('w', 122, m); b.e('w', 127, 3);
     b.e('g', 132, m); b.stairs(133, 1, 8, 3); b.goal(138);
   }),
-  // 1-C: the Turtle King's castle — lava, stone, and the king himself
-  '1-C': level('1-C', ['龜王城', 'Turtle King Castle'], 'castle', 120, 10, 14, (b) => {
+  // 1-W: the bay — under the waves, with fish; the frog suit is the way to swim
+  '1-W': level('1-W', ['海底灣', 'Coral Bay'], 'water', 130, 12, 16, (b) => {
     const m = b.mid;
-    b.ground(0, 119); b.fill(0, 11, 0, 119, 13, 9, T.STONE);
-    for (const x0 of [16, 30, 46, 60, 78]) b.lava(x0, x0 + 1);
-    b.row(22, 6, m, 'BLB'); b.e('g', 26, m); b.fill(36, 2, 0, 38, 3, 9, T.STONE); b.e('k', 42, 3);
-    b.check(52); b.row(55, 6, m, '?F?'); b.e('w', 57, m); b.fill(66, 2, 0, 67, 4, 4, T.STONE); b.fill(66, 2, 6, 67, 4, 9, T.STONE); b.e('g', 72, 3); b.e('g', 74, 7); b.row(84, 6, m, '?1?');
-    b.fill(92, 6, 0, 92, 10, 9, T.STONE); b.e('K', 108, m - 1); b.arena(96);
+    b.ground(0, 129); b.ground(0, 7, 0, 11, 12); b.ground(120, 129, 0, 11, 12); b.start(2, m, 12);
+    b.row(3, 15, m, '?R');
+    // coral pillars and rocks on the sea floor
+    for (const [x, z0, z1, top] of [[18, 0, 5, 7], [26, 6, 11, 8], [34, 0, 11, 5], [44, 2, 9, 8], [56, 0, 4, 9], [56, 7, 11, 9], [68, 0, 11, 6], [80, 3, 8, 8], [92, 0, 5, 7], [92, 7, 11, 7], [104, 0, 11, 6]]) b.fill(x, 2, z0, x + 1, top - 1, z1, T.STONE);
+    b.water(8, 2, 0, 119, 11, 11);
+    b.ring(14, 8, m, 2); b.coins(30, 9, m, 5); b.ring(50, 6, m, 2); b.coins(62, 4, m, 5); b.ring(74, 9, m, 2); b.coins(86, 5, m, 6); b.ring(98, 9, m, 2);
+    for (const [x, y, z] of [[16, 6, 3], [24, 9, 7], [32, 7, 4], [40, 5, 8], [48, 9, 3], [60, 8, 6], [66, 4, 2], [76, 6, 8], [84, 9, 4], [96, 5, 6], [108, 8, 5]]) b.e('f', x, z, y);
+    b.check(64, m, 7); b.row(38, 9, m, '?'); b.row(70, 3, m, '1');
+    b.goal(125, m, 12.8);
+  }),
+  // 1-A: the airship — a wooden ship in the sky, cannons on deck, and the little prince of the turtles at the stern
+  '1-A': level('1-A', ['飛行船', 'The Airship'], 'airship', 110, 9, 18, (b) => {
+    const m = b.mid;
+    // the hull in sections, with gaps to jump; raised decks fore and aft
+    for (const [x0, x1, top] of [[0, 22, 8], [25, 44, 8], [47, 64, 9], [67, 86, 8], [88, 109, 8]]) b.fill(x0, top - 3, 1, x1, top - 1, 7, T.PLANK);
+    b.start(2, m, 8);
+    b.fill(14, 8, 1, 17, 9, 7, T.PLANK); b.fill(34, 8, 2, 36, 8, 6, T.PLANK); b.fill(56, 9, 1, 58, 10, 7, T.PLANK);
+    // cannons along the rails
+    for (const [x, y, z] of [[10, 8, 1], [10, 8, 7], [30, 8, 1], [40, 8, 7], [52, 9, 1], [61, 9, 7], [72, 8, 1], [80, 8, 7]]) b.set(x, y, z, T.CANNON);
+    b.row(20, 12, m, '?L?'); b.coins(26, 11, m, 6); b.e('k', 38, m, 8); b.e('w', 50, 3, 9); b.row(62, 13, m, 'F'); b.e('k', 76, 5, 8);
+    b.check(68, m, 8);
+    // the prince's cabin deck
+    b.fill(88, 8, 1, 88, 9, 1, T.PLANK); b.fill(88, 8, 7, 88, 9, 7, T.PLANK); b.e('J', 100, m, 8); b.arena(90);
   }),
 };
 
@@ -138,11 +158,14 @@ export const MAP = {
     { id: '1-1', kind: 'level', x: 3, y: 7, label: '1' },
     { id: '1-2', kind: 'level', x: 5, y: 7, label: '2' },
     { id: '1-3', kind: 'level', x: 7, y: 7, label: '3' },
-    { id: 'house', kind: 'house', x: 7, y: 5 },
-    { id: '1-4', kind: 'level', x: 5, y: 5, label: '4' },
-    { id: '1-F', kind: 'fort', x: 3, y: 5 },
-    { id: '1-5', kind: 'level', x: 3, y: 3, label: '5' },
-    { id: '1-6', kind: 'level', x: 5, y: 3, label: '6' },
-    { id: '1-C', kind: 'castle', x: 8, y: 3 },
+    { id: 'house', kind: 'house', x: 9, y: 7 },
+    { id: '1-4', kind: 'level', x: 9, y: 5, label: '4' },
+    { id: '1-F', kind: 'fort', x: 7, y: 5 },
+    { id: '1-W', kind: 'level', x: 5, y: 5, label: '5' },
+    { id: 'spade', kind: 'spade', x: 3, y: 5 },
+    { id: '1-5', kind: 'level', x: 1, y: 5, label: '6' },
+    { id: '1-6', kind: 'level', x: 1, y: 3, label: '7' },
+    { id: 'house2', kind: 'house', x: 4, y: 3 },
+    { id: '1-A', kind: 'airship', x: 7, y: 3 },
   ],
 };

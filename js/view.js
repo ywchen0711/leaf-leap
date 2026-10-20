@@ -28,6 +28,9 @@ const TEX = {
   lava: () => px('lava', (g) => { rect(g, '#ff5a10', 0, 0, 16, 16); for (let x = 0; x < 16; x++) { const y = 2 + Math.round(Math.sin(x / 2.5) * 1.5); rect(g, '#ffd040', x, y, 1, 2); } rect(g, '#c82a00', 0, 10, 16, 6); }),
   grasstop: () => px('grasstop', (g) => { rect(g, '#4ac83a', 0, 0, 16, 16); for (const [x, y] of [[2, 3], [9, 2], [13, 9], [5, 11], [11, 13], [7, 6]]) { rect(g, '#7ae05a', x, y, 2, 1); rect(g, '#2a9a2a', x + 1, y + 1, 1, 1); } }),
   checker: () => px('checker', (g) => { for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) rect(g, (x + y) % 2 ? '#1a1a1a' : '#ffffff', x * 4, y * 4, 4, 4); }),
+  sand: () => px('sand', (g) => { rect(g, '#f0d898', 0, 0, 16, 16); for (const [x, y] of [[2, 3], [9, 2], [13, 9], [5, 11], [11, 13], [7, 6], [1, 14]]) rect(g, '#d8b878', x, y, 1, 1); }),
+  plank: () => px('plank', (g) => { rect(g, '#b07a40', 0, 0, 16, 16); g.fillStyle = '#6a4220'; for (let y = 0; y < 16; y += 4) g.fillRect(0, y + 3, 16, 1); for (const [x, y] of [[5, 0], [12, 4], [3, 8], [10, 12]]) g.fillRect(x, y, 1, 3); rect(g, '#d8a060', 0, 0, 16, 1); for (const [x, y] of [[1, 1], [14, 1], [1, 9], [14, 9]]) rect(g, '#3a2410', x, y, 1, 1); }),
+  cannon: () => px('cannon', (g) => { rect(g, '#2a2a30', 0, 0, 16, 16); rect(g, '#5a5a66', 1, 1, 14, 2); g.fillStyle = '#0a0a0e'; g.beginPath(); g.arc(8, 9, 4.5, 0, 7); g.fill(); rect(g, '#8a8a96', 6, 6, 2, 2); }),
   stone: () => px('stone', (g) => { rect(g, '#8a8a98', 0, 0, 16, 16); g.fillStyle = '#4a4a58'; for (let y = 0; y < 16; y += 8) { g.fillRect(0, y + 7, 16, 1); const o = (y / 8) % 2 ? 8 : 0; g.fillRect(o, y, 1, 7); } rect(g, '#b8b8c8', 0, 0, 16, 1); }),
 };
 const mats = new Map();
@@ -40,7 +43,8 @@ const box = (w, h, d, c, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(BOX,
 // which look each block gets
 function look(L, x, y, z) {
   switch (tileAt(L, x, y, z)) {
-    case T.GROUND: return tileAt(L, x, y + 1, z) === T.GROUND ? 'dirt' : 'grass';
+    case T.GROUND: return L.theme === 'water' ? 'sand' : tileAt(L, x, y + 1, z) === T.GROUND ? 'dirt' : 'grass';
+    case T.PLANK: return 'plank'; case T.CANNON: return 'cannon'; case T.QTANOOKI: case T.QFROG: return 'q';
     case T.BRICK: return 'brick'; case T.QCOIN: case T.QLEAF: case T.QFLOWER: case T.Q1UP: return 'q'; case T.USED: return 'used';
     case T.HARD: return 'wood'; case T.CLOUD: return 'cloud'; case T.NOTE: return 'note';
     case T.LAVA: return 'lava'; case T.STONE: return 'stone'; default: return null;
@@ -72,7 +76,7 @@ export function buildLevel(scene, G) {
   const group = new THREE.Group(), L = G.L, theme = L.theme, def = G.def; scene.add(group);
   const THEME = {
     grass: { sky: ['#4aa8ff', '#d0f0ff'], fog: ['#cfeaff', 40, 140] }, sky: { sky: ['#2a8aff', '#e8f6ff'], fog: ['#e0f2ff', 45, 150] },
-    cave: { sky: ['#05070d', '#141a30'], fog: ['#0a0e1a', 18, 60] }, fort: { sky: ['#100e16', '#2a2030'], fog: ['#1a1620', 20, 70] }, castle: { sky: ['#180606', '#3a1410'], fog: ['#2a0c08', 20, 70] },
+    cave: { sky: ['#05070d', '#141a30'], fog: ['#0a0e1a', 18, 60] }, water: { sky: ['#3a9ae8', '#c8ecff'], fog: ['#2a7ac8', 22, 80] }, airship: { sky: ['#ff8a4a', '#ffe0a8'], fog: ['#ffc890', 45, 160] }, fort: { sky: ['#100e16', '#2a2030'], fog: ['#1a1620', 20, 70] }, castle: { sky: ['#180606', '#3a1410'], fog: ['#2a0c08', 20, 70] },
   }[theme];
   let tileGroup = new THREE.Group(); group.add(tileGroup);
   const coinGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.1, 14); coinGeo.rotateX(Math.PI / 2);
@@ -84,7 +88,7 @@ export function buildLevel(scene, G) {
     const lists = {}, coins = [];
     for (let y = 0; y < L.h; y++) for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) {
       const t = L.tiles[(y * L.d + z) * L.w + x];
-      if (t === T.EMPTY || t === T.PIPE || t === T.PIPETOP) continue;
+      if (t === T.EMPTY || t === T.PIPE || t === T.PIPETOP || t === T.WATER) continue;
       if (t === T.COIN) { coins.push([x, y, z]); continue; }
       // only blocks you can see: at least one side open
       if (isSolid(t) && filled(x + 1, y, z) && filled(x - 1, y, z) && filled(x, y + 1, z) && filled(x, y - 1, z) && filled(x, y, z + 1) && filled(x, y, z - 1)) continue;
@@ -100,6 +104,10 @@ export function buildLevel(scene, G) {
   }
   rebuild();
   for (const p of def.pipes || []) group.add(pipeMesh(p.x, p.z, p.base, p.hgt));
+  for (const [x0, y0, z0, x1, y1, z1] of def.waters || []) {
+    const wm = new THREE.Mesh(BOX, new THREE.MeshLambertMaterial({ color: '#2a8aff', transparent: true, opacity: 0.32, depthWrite: false, side: THREE.DoubleSide })); wm.scale.set(x1 - x0 + 1, y1 - y0 + 1, z1 - z0 + 1); wm.position.set((x0 + x1 + 1) / 2, (y0 + y1 + 1) / 2, (z0 + z1 + 1) / 2); wm.renderOrder = 2; group.add(wm);
+    const top = new THREE.Mesh(new THREE.PlaneGeometry(x1 - x0 + 1, z1 - z0 + 1), new THREE.MeshLambertMaterial({ color: '#8ad8ff', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide })); top.rotation.x = -Math.PI / 2; top.position.set((x0 + x1 + 1) / 2, y1 + 1.01, (z0 + z1 + 1) / 2); group.add(top);
+  }
   // scenery
   const back = new THREE.Group(); group.add(back);
   const rnd = mulberry(L.w * 7 + L.d);
@@ -120,6 +128,15 @@ export function buildLevel(scene, G) {
       for (let k = 0; k < 3; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(1.4 + (k === 1 ? 0.6 : 0), 12, 8), cmat('#ffffff', '#b0c0d0')); s.position.set(k * 1.6, k === 1 ? 0.5 : 0, 0); g.add(s); }
       g.position.set(-20 + rnd() * (L.w + 40), y, rnd() < 0.5 ? -10 - rnd() * 40 : L.d + 14 + rnd() * 30); back.add(g);
     }
+  } else if (theme === 'water') {
+    const r2 = mulberry(5);
+    for (let i = 0; i < 70; i++) { const x = 9 + r2() * (L.w - 20), z = r2() * L.d; if (isSolid(tileAt(L, Math.floor(x), 2, Math.floor(z)))) continue; const hgt = 1 + r2() * 3, sw = box(0.18, hgt, 0.18, r2() < 0.5 ? '#2a9a5a' : '#c8507a', x, 2 + hgt / 2, z); sw.userData.sway = r2() * 6; back.add(sw); }
+    const sea = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 400, 400), cmat('#1a5aa8')); sea.rotation.x = -Math.PI / 2; sea.position.set(L.w / 2, 11.9, L.d / 2 + 210); back.add(sea);
+  } else if (theme === 'airship') {
+    const r2 = mulberry(9);
+    const below = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 400, 400), new THREE.MeshBasicMaterial({ color: '#fff0e0' })); below.rotation.x = -Math.PI / 2; below.position.set(L.w / 2, -16, L.d / 2); back.add(below);
+    for (let i = 0; i < 40; i++) { const g = new THREE.Group(); for (let k = 0; k < 3; k++) { const c = new THREE.Mesh(new THREE.SphereGeometry(2 + (k === 1 ? 1 : 0), 12, 8), cmat('#fff4e8', '#c8a080')); c.position.set(k * 2.4, k === 1 ? 0.8 : 0, 0); g.add(c); } g.position.set(-30 + r2() * (L.w + 60), -14 + r2() * 24, r2() < 0.5 ? -12 - r2() * 40 : L.d + 14 + r2() * 30); back.add(g); }
+    for (const x of [8, 32, 55, 78, 100]) { const mast = box(0.4, 10, 0.4, '#6a4220', x, 13, 0.4); const sail = box(4, 4, 0.1, '#f8f0e0', x, 14, 0.2); mast.castShadow = true; back.add(mast, sail); const prop = new THREE.Group(); prop.add(box(0.2, 0.2, 3, '#8a8a96'), box(0.2, 3, 0.2, '#8a8a96')); prop.position.set(x, 4, -0.4); prop.userData.spin = true; back.add(prop); }
   } else if (theme === 'cave') {
     const wall = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 60, 30), new THREE.MeshLambertMaterial({ color: '#2a3048' })); wall.position.set(L.w / 2, 7, -1.5); back.add(wall);
     for (let x = 3; x < L.w; x += 4 + rnd() * 5) for (const z of [1 + rnd() * 3, L.d - 2 - rnd() * 3]) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.2 + rnd(), 6), cmat('#4a4a68')); s.rotation.x = Math.PI; s.position.set(x, 9.4, z); back.add(s); }
@@ -147,6 +164,7 @@ export function buildLevel(scene, G) {
       if (coinMesh) { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t * 3); coinMesh.userData.list.forEach(([x, y, z], i) => { p.set(x + 0.5, y + 0.5, z + 0.5); m4.compose(p, q, sc); coinMesh.setMatrixAt(i, m4); }); coinMesh.instanceMatrix.needsUpdate = true; }
       if (goal) { const k = G.cleared || cardAt(G.t); if (k !== lastCard.k) { lastCard.k = k; goal.material.forEach((m) => { m.map = cardTex(k); m.needsUpdate = true; }); } goal.rotation.y = t * 1.5; if (G.cleared) goal.position.y += 0.04; }
       const lava = mats.get('lava'); if (lava) lava.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.15;
+      for (const o of back.children) { if (o.userData.sway != null) o.rotation.z = Math.sin(t * 1.5 + o.userData.sway) * 0.2; if (o.userData.spin) o.rotation.z = t * 8; }
     },
     dispose() { scene.remove(group); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.geometry && o.geometry !== BOX) o.geometry.dispose(); }); },
   };
@@ -164,7 +182,8 @@ export function cardTex(k) { return px('card_' + k, (g) => { rect(g, '#101010', 
 export function cardDataURL(k) { const t = cardTex(k); return t.image.toDataURL(); }
 
 // ---------------------------------------------------------------- characters
-const PALETTE = { 0: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' }, 1: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' }, 2: { cap: '#ffffff', shirt: '#ffffff', alls: '#e8302a' }, 3: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' } };
+const PALETTE = { 0: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' }, 1: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' }, 2: { cap: '#ffffff', shirt: '#ffffff', alls: '#e8302a' }, 3: { cap: '#ff6a1a', shirt: '#ff6a1a', alls: '#2a6ad8' },
+  4: { cap: '#9a5a2a', shirt: '#9a5a2a', alls: '#8a4a1a', skin: '#f0c890' }, 5: { cap: '#3ab83a', shirt: '#3ab83a', alls: '#2a9a2a', skin: '#c8f0a0' }, stone: { cap: '#8a8a8a', shirt: '#8a8a8a', alls: '#7a7a7a', skin: '#9a9a9a' } };
 export function makeHero() {
   const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
   const parts = {};
@@ -176,25 +195,34 @@ export function makeHero() {
   parts.armLm = box(0.2, 0.5, 0.22, '#ff6a1a', 0, -0.2, 0); parts.armRm = box(0.2, 0.5, 0.22, '#ff6a1a', 0, -0.2, 0);
   armL.add(parts.armLm, box(0.2, 0.16, 0.2, '#ffffff', 0, -0.48, 0)); armR.add(parts.armRm, box(0.2, 0.16, 0.2, '#ffffff', 0, -0.48, 0));
   parts.body = box(0.62, 0.62, 0.42, '#2a6ad8', 0, 0.85, 0); parts.shirt = box(0.64, 0.24, 0.44, '#ff6a1a', 0, 1.1, 0);
-  const head = new THREE.Group(); head.position.y = 1.45;
-  head.add(box(0.58, 0.5, 0.52, '#ffd0a0', 0, 0, 0), box(0.12, 0.14, 0.04, '#1a1a1a', -0.13, 0.04, 0.27), box(0.12, 0.14, 0.04, '#1a1a1a', 0.13, 0.04, 0.27), box(0.16, 0.12, 0.12, '#ffb080', 0, -0.06, 0.3), box(0.36, 0.06, 0.04, '#5a2a10', 0, -0.17, 0.27));
+  const head = new THREE.Group(); head.position.y = 1.45; parts.face = box(0.58, 0.5, 0.52, '#ffd0a0', 0, 0, 0);
+  head.add(parts.face, box(0.12, 0.14, 0.04, '#1a1a1a', -0.13, 0.04, 0.27), box(0.12, 0.14, 0.04, '#1a1a1a', 0.13, 0.04, 0.27), box(0.16, 0.12, 0.12, '#ffb080', 0, -0.06, 0.3), box(0.36, 0.06, 0.04, '#5a2a10', 0, -0.17, 0.27));
   parts.cap = box(0.62, 0.2, 0.56, '#ff6a1a', 0, 0.3, 0); parts.brim = box(0.5, 0.06, 0.26, '#ff6a1a', 0, 0.21, 0.35); head.add(parts.cap, parts.brim);
   // the leaf look: round ears and a striped tail
   const ears = new THREE.Group(); ears.add(box(0.16, 0.2, 0.08, '#b8783a', -0.2, 0.5, 0), box(0.16, 0.2, 0.08, '#b8783a', 0.2, 0.5, 0)); head.add(ears);
   const tail = new THREE.Group(); tail.position.set(0, 0.75, -0.25); for (let i = 0; i < 4; i++) tail.add(box(0.2, 0.2, 0.2, i % 2 ? '#3a2410' : '#c8884a', 0, -i * 0.05, -i * 0.17)); tail.rotation.x = -0.6;
+  // the frog suit: big round eyes on top
+  const frogEyes = new THREE.Group(); for (const x of [-0.18, 0.18]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.15, 10, 8), cmat('#ffffff')); e.position.set(x, 0.42, 0.12); const pu = box(0.08, 0.1, 0.04, '#1a1a1a', 0, 0, 0.14); e.add(pu); frogEyes.add(e); } head.add(frogEyes);
   inner.add(legL, legR, armL, armR, parts.body, parts.shirt, head, tail);
-  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, parts, phase: 0, power: -1 };
+  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, frogEyes, parts, phase: 0, power: -1 };
   return g;
 }
 export function poseHero(m, h, dt, t) {
   const u = m.userData;
-  if (u.power !== h.power) {
-    u.power = h.power; const p = PALETTE[h.power];
+  const lookKey = h.statue > 0 ? 'stone' : h.power;
+  if (u.power !== lookKey) {
+    u.power = lookKey; const p = PALETTE[lookKey];
+    // a statue is stone all over; coming back, every part gets its own colour again
+    u.inner.traverse((o) => { if (!o.isMesh) return; if (!o.userData.mat0) o.userData.mat0 = o.material; o.material = lookKey === 'stone' ? cmat('#8a8a8a') : o.userData.mat0; });
     for (const k of ['cap', 'brim']) u.parts[k].material = cmat(p.cap);
     for (const k of ['shirt', 'armLm', 'armRm']) u.parts[k].material = cmat(p.shirt);
     for (const k of ['body', 'legLm', 'legRm']) u.parts[k].material = cmat(p.alls);
-    u.ears.visible = u.tail.visible = h.power === 3;
+    u.parts.face.material = cmat(p.skin || '#ffd0a0');
+    const tailed = h.power === 3 || h.power === 4;
+    u.ears.visible = u.tail.visible = tailed; u.frogEyes.visible = h.power === 5; u.parts.brim.visible = h.power !== 5;
+    u.ears.children.forEach((e) => { e.material = cmat(h.statue > 0 ? '#8a8a8a' : '#b8783a'); });
   }
+  if (h.statue > 0) { m.position.set(h.x + h.w / 2, h.y, h.z + h.d / 2); u.inner.rotation.set(0, 0, 0); for (const k of ['legL', 'legR', 'armL', 'armR']) u[k].rotation.set(0, 0, 0); m.visible = true; return; }
   const s = h.power ? 1 : 0.56; u.inner.scale.set(h.power ? 1 : 0.95, s, h.power ? 1 : 0.95);
   m.position.set(h.x + h.w / 2, h.y, h.z == null ? 0.1 : h.z + h.d / 2);
   const face = h.face == null ? 0 : h.face, dA = ((face - m.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
@@ -204,6 +232,7 @@ export function poseHero(m, h, dt, t) {
   u.armL.rotation.z = u.armR.rotation.z = 0;
   const speed = Math.hypot(h.vx, h.vz || 0);
   if (h.pound) { u.inner.rotation.x = h.pound === 1 ? (0.18 - h.poundT) / 0.18 * Math.PI * 2 : 0; u.legL.rotation.x = u.legR.rotation.x = -1.2; return; } u.inner.rotation.x = 0;
+  if (h.swimming) { u.inner.rotation.x = 1.0; const s2 = Math.sin(t * (h.power === 5 ? 14 : 8)); u.legL.rotation.x = s2 * 0.8; u.legR.rotation.x = -s2 * 0.8; u.armL.rotation.x = -2 + s2; u.armR.rotation.x = -2 - s2; m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2); return; }
   if (!h.onGround) { u.legL.rotation.x = -0.8; u.legR.rotation.x = 0.5; u.armL.rotation.x = -2.6; u.armR.rotation.x = 0.4; if (h.flyT > 0 || h.wag > 0) u.armL.rotation.x = u.armR.rotation.x = -1.4 + Math.sin(t * 30) * 0.6; }
   else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 0.9; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; }
   u.tail.rotation.y = Math.sin(t * (h.wag > 0 || h.flyT > 0 ? 40 : 4)) * 0.5;
@@ -227,6 +256,16 @@ export function makeEnemy(e) {
     const top = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), cmat('#e8302a')); const bot = top.clone(); bot.rotation.x = Math.PI;
     for (const [x, y, z] of [[0.2, 0.22, 0.22], [-0.2, 0.22, 0.22], [0, 0.35, -0.1]]) top.add(box(0.1, 0.1, 0.1, '#ffffff', x, y, z));
     head.add(top, bot); inner.add(stem, head, box(0.5, 0.08, 0.2, '#2ab83a', -0.25, 0.5, 0), box(0.5, 0.08, 0.2, '#2ab83a', 0.25, 0.5, 0)); u.top = top; u.bot = bot;
+  } else if (e.kind === 'fish') {
+    const body = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10), cmat('#ff5a3a')); body.scale.set(0.8, 0.9, 1.2); body.position.y = 0.32;
+    const fin = box(0.06, 0.4, 0.4, '#ffd8c8', 0, 0.32, -0.6); fin.rotation.x = 0.3; u.fin = fin;
+    const eye = box(0.1, 0.12, 0.05, '#1a1a1a', 0.2, 0.42, 0.32), eye2 = box(0.1, 0.12, 0.05, '#1a1a1a', -0.2, 0.42, 0.32), lips = box(0.2, 0.08, 0.06, '#ffd040', 0, 0.26, 0.5);
+    inner.add(body, fin, eye, eye2, lips, box(0.5, 0.06, 0.2, '#ffd8c8', 0, 0.55, 0));
+  } else if (e.kind === 'boss' && e.prince) {
+    const shell = new THREE.Mesh(new THREE.SphereGeometry(0.6, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), cmat('#4ab84a')); shell.scale.set(1, 1.1, 1); shell.position.y = 0.45;
+    const head = new THREE.Group(); head.position.set(0, 1.15, 0.3); head.add(box(0.55, 0.5, 0.5, '#f0d060', 0, 0, 0), box(0.12, 0.16, 0.04, '#1a1a1a', -0.13, 0.06, 0.26), box(0.12, 0.16, 0.04, '#1a1a1a', 0.13, 0.06, 0.26), box(0.5, 0.25, 0.4, '#3a8aff', 0, 0.35, -0.05), box(0.2, 0.2, 0.2, '#3a8aff', 0, 0.5, -0.15));
+    const wand = new THREE.Group(); wand.add(box(0.06, 0.7, 0.06, '#f8f0e0', 0, 0.35, 0)); const star = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), cmat('#ffd030', '#a07000')); star.position.y = 0.75; wand.add(star); wand.position.set(0.45, 0.7, 0.3); wand.rotation.z = -0.4;
+    inner.add(shell, head, wand, box(0.3, 0.25, 0.4, '#f0d060', -0.28, 0.12, 0.1), box(0.3, 0.25, 0.4, '#f0d060', 0.28, 0.12, 0.1)); u.head = head; u.wand = wand;
   } else if (e.kind === 'boss') {
     const k = e.big, sc = k ? 1.25 : 1;
     const shell = new THREE.Mesh(new THREE.SphereGeometry(0.8, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2), cmat(k ? '#2a8a3a' : '#8a3ac8')); shell.scale.set(1.05, 1.1, 1); shell.position.y = 0.55;
@@ -246,7 +285,8 @@ export function poseEnemy(m, e, dt, t) {
   if (!e.alive && e.how === 'stomp') { u.inner.scale.y = 0.25; return; }
   if (e.kind === 'walker') { u.wings.visible = !!e.wings; u.wings.children.forEach((w) => { w.rotation.z = w.userData.s * (0.4 + Math.sin(t * 16) * 0.5); }); u.inner.rotation.z = e.flip ? Math.PI : Math.sin(t * 8) * 0.12; }
   if (e.kind === 'koopa') { u.body.visible = e.state === 'walk'; if (e.state === 'spin') u.inner.rotation.y += dt * 20; else u.inner.rotation.y = 0; if (e.state !== 'walk' && !e.flip) u.inner.position.y = -0.1; }
-  if (e.kind === 'boss') { m.visible = !(e.inv > 0 && Math.floor(t * 16) % 2); u.head.rotation.z = Math.sin(t * 5) * 0.08; }
+  if (e.kind === 'boss') { m.visible = !(e.inv > 0 && Math.floor(t * 16) % 2); u.head.rotation.z = Math.sin(t * 5) * 0.08; if (u.wand) u.wand.rotation.z = -0.4 + Math.sin(t * 6) * 0.5; }
+  if (e.kind === 'fish') u.fin.rotation.y = Math.sin(t * 12) * 0.6;
 }
 export function makeItem(kind) {
   const g = new THREE.Group();
@@ -257,13 +297,22 @@ export function makeItem(kind) {
   } else if (kind === 'flower') {
     g.add(box(0.1, 0.4, 0.1, '#2ab83a', 0, 0.2, 0), box(0.5, 0.06, 0.15, '#2ab83a', 0, 0.12, 0));
     const head = new THREE.Group(); head.position.y = 0.6; for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2; head.add(box(0.22, 0.22, 0.08, i % 2 ? '#ff7a1a' : '#ffd030', Math.cos(a) * 0.22, Math.sin(a) * 0.22, 0)); } head.add(box(0.2, 0.2, 0.1, '#fff8e0', 0, 0, 0.04)); g.add(head);
+  } else if (kind === 'tanooki' || kind === 'frog') {
+    const c = kind === 'tanooki' ? '#9a5a2a' : '#3ab83a';
+    g.add(box(0.55, 0.55, 0.3, c, 0, 0.35, 0), box(0.18, 0.3, 0.2, c, -0.18, 0.08, 0), box(0.18, 0.3, 0.2, c, 0.18, 0.08, 0));
+    if (kind === 'tanooki') g.add(box(0.14, 0.18, 0.1, '#b8783a', -0.18, 0.7, 0), box(0.14, 0.18, 0.1, '#b8783a', 0.18, 0.7, 0), box(0.16, 0.16, 0.4, '#c8884a', 0, 0.3, -0.3));
+    else for (const x of [-0.15, 0.15]) { const e = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), cmat('#ffffff')); e.position.set(x, 0.7, 0.05); g.add(e); }
   } else if (kind === 'leaf') {
     const l = new THREE.Mesh(new THREE.SphereGeometry(0.4, 10, 8), cmat('#e8902a')); l.scale.set(1, 0.18, 0.6); l.position.y = 0.3; g.add(l, box(0.5, 0.04, 0.04, '#7a4a1a', 0, 0.36, 0));
   }
   return g;
 }
 export function makeFireball() { const g = new THREE.Group(); g.add(new THREE.Mesh(new THREE.SphereGeometry(0.22, 10, 8), cmat('#ffb030', '#ff5a00'))); return g; }
-export function makeShot() { const m = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), cmat('#ff6a2a', '#ff3000')); m.scale.set(1.5, 0.8, 0.8); return m; }
+export function makeShot(kind) {
+  if (kind === 'ball') return new THREE.Mesh(new THREE.SphereGeometry(0.32, 12, 10), cmat('#1a1a22'));
+  if (kind === 'ring') { const m = new THREE.Mesh(new THREE.TorusGeometry(0.3, 0.08, 8, 16), cmat('#5ac8ff', '#2a78c8')); return m; }
+  const m = new THREE.Mesh(new THREE.SphereGeometry(0.3, 10, 8), cmat('#ff6a2a', '#ff3000')); m.scale.set(1.5, 0.8, 0.8); return m;
+}
 export function makeCoinPop() { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12), cmat('#ffd030', '#7a5000')); m.rotation.x = Math.PI / 2; return m; }
 export const tileBox = (key) => new THREE.Mesh(BOX, mat(key));
 export { box, look };

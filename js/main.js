@@ -16,7 +16,7 @@ const N = (pair) => pair[EN() ? 1 : 0];
 
 // ---------------------------------------------------------------- the save
 const KEY = 'leafleap.save';
-const fresh = () => ({ v: 1, cleared: {}, node: 0, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], house: false, won: false });
+const fresh = () => ({ v: 1, cleared: {}, node: 0, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, pwing: false, won: false });
 let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 1) return { ...fresh(), ...s }; } catch (e) { /* none */ } return null; })();
 const hadSave = !!SAVE; if (!SAVE) SAVE = fresh();
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SAVE)); } catch (e) { /* private mode */ } };
@@ -55,6 +55,8 @@ const nodeMesh = [];
     if (n.kind === 'level' || n.kind === 'start') { const tex = labelTex(n.kind === 'start' ? 'START' : n.label, n.kind === 'start' ? '#f8f0e0' : '#ff9a2a', '#1a1a1a'); m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.8), [cmat('#c86a1a'), cmat('#c86a1a'), new THREE.MeshLambertMaterial({ map: tex }), cmat('#c86a1a'), cmat('#c86a1a'), cmat('#c86a1a')]); m.position.set(n.x, 0.12, n.y); }
     else if (n.kind === 'house') { m = new THREE.Group(); m.add(box(0.8, 0.6, 0.7, '#f8f0e0', 0, 0.3, 0)); const roof = new THREE.Mesh(new THREE.ConeGeometry(0.7, 0.55, 4), cmat('#e8302a')); roof.rotation.y = Math.PI / 4; roof.position.y = 0.88; m.add(roof, box(0.22, 0.34, 0.05, '#7a3a10', 0, 0.17, 0.36)); m.position.set(n.x, 0, n.y); }
     else if (n.kind === 'fort') { m = new THREE.Group(); m.add(box(0.9, 1.1, 0.9, '#9a9aa8', 0, 0.55, 0)); for (const [x, z] of [[-0.35, -0.35], [0.35, -0.35], [-0.35, 0.35], [0.35, 0.35]]) m.add(box(0.2, 0.2, 0.2, '#9a9aa8', x, 1.2, z)); m.add(box(0.3, 0.45, 0.05, '#2a2a2a', 0, 0.23, 0.46)); m.position.set(n.x, 0, n.y); }
+    else if (n.kind === 'spade') { const tex = labelTex('♠', '#2a9a4a', '#ffffff'); m = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.22, 0.8), [cmat('#1a6a2a'), cmat('#1a6a2a'), new THREE.MeshLambertMaterial({ map: tex }), cmat('#1a6a2a'), cmat('#1a6a2a'), cmat('#1a6a2a')]); m.position.set(n.x, 0.12, n.y); }
+    else if (n.kind === 'airship') { m = new THREE.Group(); const hull = box(1.6, 0.4, 0.6, '#9a6a3a', 0, 1.2, 0), deck = box(1.7, 0.08, 0.66, '#c89a60', 0, 1.42, 0), mast = box(0.06, 0.8, 0.06, '#5a3a1a', 0, 1.85, 0), sail = box(0.04, 0.45, 0.5, '#f8f0e0', 0.05, 1.9, 0), prop = box(0.06, 0.5, 0.06, '#8a8a96', -0.85, 1.2, 0), flag = box(0.3, 0.2, 0.02, '#2a2a2a', 0.15, 2.2, 0); m.add(hull, deck, mast, sail, prop, flag); m.userData.bob = true; m.position.set(n.x, 0, n.y); }
     else if (n.kind === 'castle') { m = new THREE.Group(); m.add(box(1.4, 1.2, 1, '#c8c8d0', 0, 0.6, 0)); for (const x of [-0.6, 0.6]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.25, 0.25, 1.8, 10), cmat('#c8c8d0')); t.position.set(x, 0.9, 0); const c = new THREE.Mesh(new THREE.ConeGeometry(0.32, 0.5, 10), cmat('#2a8a3a')); c.position.set(x, 2.05, 0); m.add(t, c); } m.add(box(0.4, 0.6, 0.05, '#2a2a2a', 0, 0.3, 0.51), box(0.04, 0.8, 0.04, '#ffffff', 0, 1.6, 0), box(0.4, 0.25, 0.03, '#2ab83a', 0.2, 1.85, 0)); m.position.set(n.x, 0, n.y); }
     mapGroup.add(m); nodeMesh[i] = m;
   });
@@ -72,11 +74,13 @@ function refreshMap() {
     const m = nodeMesh[i];
     if (n.kind === 'level') m.material[2] = new THREE.MeshLambertMaterial({ map: SAVE.cleared[n.id] ? labelTex('✔', '#4a8aff', '#ffffff') : labelTex(n.label, '#ff9a2a', '#1a1a1a') });
     if (n.kind === 'fort') m.scale.y = SAVE.cleared[n.id] ? 0.45 : 1;
-    if (n.kind === 'house') m.children[1].material = cmat(SAVE.house ? '#9a9aa8' : '#e8302a');
+    if (n.kind === 'house') m.children[1].material = cmat(SAVE.houses[n.id] ? '#9a9aa8' : '#e8302a');
+    if (n.kind === 'spade') m.visible = !SAVE.spade;
+    if (n.kind === 'airship') m.visible = !SAVE.cleared[n.id];
   });
 }
 const mapHero = makeHero(); mapHero.scale.setScalar(0.6); mapGroup.add(mapHero);
-const passable = (i) => nodes[i].kind === 'start' || nodes[i].kind === 'house' || !!SAVE.cleared[nodes[i].id];
+const passable = (i) => nodes[i].kind === 'start' || nodes[i].kind === 'house' || nodes[i].kind === 'spade' || !!SAVE.cleared[nodes[i].id];
 
 // ---------------------------------------------------------------- state
 const S = { mode: 'title', panel: null, G: null, LV: null, endT: 0, deadT: 0, walk: null, acc: 0, t: 0, shake: 0 };
@@ -153,7 +157,7 @@ function panelInput(edge) {
 function toast(text) { const d = $('toast'); d.innerHTML = text; d.classList.add('on'); clearTimeout(toast.t); toast.t = setTimeout(() => d.classList.remove('on'), 2400); }
 function banner(text, sub) { const d = $('banner'); d.innerHTML = `<b>${text}</b>${sub ? `<small>${sub}</small>` : ''}`; d.classList.remove('on'); void d.offsetWidth; d.classList.add('on'); }
 const cardImg = (k) => `<img src="${cardDataURL(k)}" alt="${k}">`;
-const itemImg = (it) => (it === 'leaf' ? `<img src="${leafURL()}" alt="leaf">` : cardImg(it));
+const itemImg = (it) => (it === 'mush' || it === 'flower' || it === 'star' ? cardImg(it) : `<img src="${iconURL(it)}" alt="${it}">`);
 function hud() {
   $('lives').textContent = SAVE.lives; $('coins').textContent = String(SAVE.coins).padStart(2, '0');
   const pm = S.G ? S.G.hero.pm : 0, lit = Math.floor(pm * 6 + 0.001);
@@ -161,9 +165,9 @@ function hud() {
   $('cards').innerHTML = [0, 1, 2].map((i) => `<span>${SAVE.cards[i] ? cardImg(SAVE.cards[i]) : ''}</span>`).join('');
   $('where').textContent = S.mode === 'level' ? `WORLD 1-${S.G.def.id.split('-')[1]}` : 'WORLD 1';
 }
-const POWER_NAME = [['小', 'Small'], ['大', 'Big'], ['火焰', 'Fire'], ['葉子', 'Leaf']];
-const ITEM_NAME = { mush: ['蘑菇', 'Mushroom'], flower: ['火焰花', 'Fire Flower'], leaf: ['神奇葉子', 'Super Leaf'] };
-const ITEM_POWER = { mush: 1, flower: 2, leaf: 3 };
+const POWER_NAME = [['小', 'Small'], ['大', 'Big'], ['火焰', 'Fire'], ['狸貓尾巴', 'Raccoon'], ['狸貓裝', 'Tanooki'], ['青蛙裝', 'Frog']];
+const ITEM_NAME = { mush: ['蘑菇', 'Mushroom'], flower: ['火焰花', 'Fire Flower'], leaf: ['神奇葉子', 'Super Leaf'], tanooki: ['狸貓裝', 'Tanooki Suit'], frog: ['青蛙裝', 'Frog Suit'], pwing: ['P 翅膀', 'P-Wing'] };
+const ITEM_POWER = { mush: 1, flower: 2, leaf: 3, tanooki: 4, frog: 5 };
 
 // ---------------------------------------------------------------- the map screen
 function toMap() {
@@ -174,12 +178,25 @@ function toMap() {
 }
 function mapText() {
   const n = nodes[SAVE.node];
-  const what = n.kind === 'start' ? L('出發點', 'Start') : n.kind === 'house' ? L('蘑菇小屋', 'Mushroom House') : N(LEVELS[n.id].name);
+  const what = n.kind === 'start' ? L('出發點', 'Start') : n.kind === 'house' ? L('蘑菇小屋', 'Mushroom House') : n.kind === 'spade' ? L('黑桃翻牌', 'Spade Panel') : N(LEVELS[n.id].name);
   $('nodename').innerHTML = `<b>${n.kind === 'level' ? `1-${n.label} ` : ''}${what}</b>${SAVE.cleared[n.id] ? ` <span class="done">${L('已過關', 'Cleared')}</span>` : ''}`;
   $('items').innerHTML = `<span>${L('道具', 'Items')}</span>` + (SAVE.items.length ? SAVE.items.map(itemImg).join('') : `<small>${L('（沒有）', '(none)')}</small>`) + `<em>${L('目前', 'Now')}: ${N(POWER_NAME[SAVE.power])}</em>`;
   $('maphelp').textContent = PAD.used ? L('十字鍵 移動 · A 進入 · Y 道具 · Start 選單', 'D-pad move · A enter · Y items · Start menu') : matchMedia('(pointer: coarse)').matches ? L('方向鈕 移動 · A 進入 · B 道具', 'Arrows move · A enter · B items') : L('方向鍵 移動 · 空白鍵／Enter 進入 · X 道具 · Esc 選單', 'Arrows move · Space / Enter to enter · X items · Esc menu');
 }
 let _leaf = null;
+// little pictures for the items, in the card frame
+const _icons = {};
+function iconURL(k) {
+  if (k === 'leaf') return leafURL(); if (_icons[k]) return _icons[k];
+  const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d'), R = (col, x, y, w, h) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+  R('#101010', 0, 0, 16, 16); R('#f8f8f8', 1, 1, 14, 14);
+  if (k === 'tanooki') { R('#9a5a2a', 4, 4, 8, 9); R('#b8783a', 4, 2, 2, 3); R('#b8783a', 10, 2, 2, 3); R('#f0c890', 6, 5, 4, 3); R('#1a1a1a', 6, 6, 1, 1); R('#1a1a1a', 9, 6, 1, 1); R('#c8884a', 12, 9, 3, 2); R('#3a2410', 13, 9, 1, 2); }
+  else if (k === 'frog') { R('#3ab83a', 3, 5, 10, 8); R('#ffffff', 4, 3, 3, 3); R('#ffffff', 9, 3, 3, 3); R('#1a1a1a', 5, 4, 1, 1); R('#1a1a1a', 10, 4, 1, 1); R('#c8f0a0', 6, 8, 4, 3); R('#2a8a2a', 3, 12, 3, 2); R('#2a8a2a', 10, 12, 3, 2); }
+  else if (k === 'pwing') { R('#d8282a', 2, 2, 12, 12); g.fillStyle = '#ffffff'; g.font = 'bold 9px monospace'; g.fillText('P', 6, 11); R('#ffffff', 2, 5, 3, 2); R('#ffffff', 11, 5, 3, 2); }
+  else if (k === 'coin') { R('#ffd030', 5, 3, 6, 10); R('#ffffff', 6, 4, 1, 6); R('#a07000', 10, 4, 1, 8); }
+  else if (k === 'back') { R('#2a9a4a', 1, 1, 14, 14); g.fillStyle = '#ffffff'; g.font = 'bold 11px sans-serif'; g.fillText('♠', 3, 12); }
+  _icons[k] = c.toDataURL(); return _icons[k];
+}
 function leafURL() { if (_leaf) return _leaf; const c = document.createElement('canvas'); c.width = c.height = 16; const g = c.getContext('2d'); g.fillStyle = '#101010'; g.fillRect(0, 0, 16, 16); g.fillStyle = '#f8f8f8'; g.fillRect(1, 1, 14, 14); g.fillStyle = '#e8902a'; g.beginPath(); g.ellipse(8, 8, 5, 3.2, -0.5, 0, 7); g.fill(); g.fillStyle = '#7a4a1a'; g.fillRect(3, 11, 3, 1); _leaf = c.toDataURL(); return _leaf; }
 function mapStep(dt, edge) {
   if (S.walk) {
@@ -205,20 +222,54 @@ function mapStep(dt, edge) {
 function enterNode() {
   const n = nodes[SAVE.node];
   if (n.kind === 'start') { toast(L('往右走，進入第 1 關！', 'Walk right to the first level!')); return; }
-  if (n.kind === 'house') { if (SAVE.house) { toast(L('小屋今天休息囉', 'The house is closed for now')); return; } return housePanel(); }
+  if (n.kind === 'house') { if (SAVE.houses[n.id]) { toast(L('小屋今天休息囉', 'The house is closed for now')); return; } return housePanel(n.id); }
+  if (n.kind === 'spade') { if (SAVE.spade) { toast(L('翻牌遊戲已經玩過了', 'The spade game has been played')); return; } return spadePanel(); }
   sound.play('enter'); startLevel(n.id, false);
 }
-function housePanel() {
+// the first house hides a leaf, a tanooki suit and a frog suit; the second, the two suits and a P-wing
+const HOUSE_ITEMS = { house: ['leaf', 'tanooki', 'frog'], house2: ['tanooki', 'frog', 'pwing'] };
+function housePanel(id) {
+  const chest = [...HOUSE_ITEMS[id]].sort(() => Math.random() - 0.5);
   showPanel('house', L('蘑菇小屋', 'Mushroom House'), () => `<p class="say">${L('歡迎！選一個寶箱，裡面的道具送給你。', 'Welcome! Pick a chest, and what is inside is yours.')}</p><div class="chests">${[1, 2, 3].map((i) => btn(`<i class="chest"></i>${i}`, () => {
-    const it = ['mush', 'flower', 'leaf', 'leaf'][Math.floor(Math.random() * 4)]; SAVE.items.push(it); if (SAVE.items.length > 8) SAVE.items.shift(); SAVE.house = true; store(); refreshMap(); mapText(); sound.play('power');
+    const it = chest[i - 1]; SAVE.items.push(it); if (SAVE.items.length > 8) SAVE.items.shift(); SAVE.houses[id] = true; store(); refreshMap(); mapText(); sound.play('power');
     showPanel('house', L('得到了！', 'You got it!'), () => `<div class="got">${itemImg(it)}</div><p class="say">${N(ITEM_NAME[it])} — ${L('在地圖上按「道具」使用。', 'use it from Items on the map.')}</p>${btn('OK', closePanel, { cls: 'go' })}`);
   }, { cls: 'chestbtn' })).join('')}</div>`);
+}
+// the spade panel: eighteen cards face down; find pairs, and two misses end the game
+const SPADE_PRIZE = { mush: 'item', flower: 'item', leaf: 'item', tanooki: 'item', frog: 'item', star: 'life', coin: 'coins' };
+function spadePanel() {
+  const deck = ['mush', 'mush', 'flower', 'flower', 'star', 'leaf', 'tanooki', 'frog', 'coin'].flatMap((k) => [k, k]).sort(() => Math.random() - 0.5);
+  const st = { deck, done: new Set(), open: [], miss: 0, busy: false, won: [] };
+  const draw = () => showPanel('spade', L('黑桃翻牌', 'Spade Panel'), () => {
+    let h = `<p class="say">${L('翻兩張一樣的卡就能拿到獎品。錯兩次遊戲就結束。', 'Turn over two matching cards to win the prize. Two misses and the game is over.')} <b>${L('失誤', 'Misses')}: ${st.miss} / 2</b></p><div class="deck">`;
+    st.deck.forEach((k, i) => { const up = st.done.has(i) || st.open.includes(i); h += btn(`<img src="${up ? (k === 'mush' || k === 'flower' || k === 'star' ? cardDataURL(k) : iconURL(k)) : iconURL('back')}" alt="">`, () => flip(i), { cls: 'scard' + (st.done.has(i) ? ' done' : ''), off: up || st.busy || st.miss >= 2 }); });
+    return h + `</div>${st.won.length ? `<p class="say">${L('獎品', 'Prizes')}: ${st.won.join(' ')}</p>` : ''}${st.miss >= 2 || st.done.size === st.deck.length ? btn('OK', () => { SAVE.spade = true; store(); refreshMap(); mapText(); closePanel(); sound.setSong('map'); }, { cls: 'go' }) : ''}`;
+  });
+  const flip = (i) => {
+    if (st.busy || st.open.includes(i) || st.done.has(i)) return;
+    st.open.push(i); sound.play('click'); draw();
+    if (st.open.length < 2) return;
+    st.busy = true;
+    setTimeout(() => {
+      const [a, b] = st.open; st.busy = false; st.open = [];
+      if (st.deck[a] === st.deck[b]) {
+        st.done.add(a); st.done.add(b); const k = st.deck[a], kind = SPADE_PRIZE[k]; sound.play('card');
+        if (kind === 'item') { SAVE.items.push(k); if (SAVE.items.length > 8) SAVE.items.shift(); st.won.push(N(ITEM_NAME[k])); }
+        else if (kind === 'life') { SAVE.lives++; st.won.push('1UP'); sound.play('oneup'); }
+        else { SAVE.coins += 10; st.won.push(L('10 金幣', '10 coins')); }
+        store();
+      } else { st.miss++; sound.play('deny'); }
+      draw();
+    }, 650);
+  };
+  draw();
 }
 function itemsPanel() {
   showPanel('items', L('道具', 'Items'), () => {
     if (!SAVE.items.length) return `<p class="say">${L('沒有道具。蘑菇小屋可以拿到。', 'No items. Visit the Mushroom House to get one.')}</p>${btn('OK', closePanel)}`;
     return `<p class="say">${L('在進入關卡前使用，讓自己變強。', 'Use one before a level to power up.')} ${L('目前', 'Now')}: <b>${N(POWER_NAME[SAVE.power])}</b></p><div class="row">` + SAVE.items.map((it, i) => btn(`${itemImg(it)}<span>${N(ITEM_NAME[it])}</span>`, () => {
-      const p = ITEM_POWER[it]; if (p <= SAVE.power && !(it === 'mush' && SAVE.power === 0)) { sound.play('deny'); toast(L('現在用沒有效果', 'That would not help right now')); return; }
+      if (it === 'pwing') { if (SAVE.pwing) { sound.play('deny'); toast(L('P 翅膀已經準備好了', 'A P-wing is already on')); return; } SAVE.pwing = true; SAVE.items.splice(i, 1); sound.play('leaf'); store(); mapText(); closePanel(); toast(L('P 翅膀！下一關可以一直飛', 'P-wing! You can fly all through the next level')); return; }
+      const p = ITEM_POWER[it]; if (p === SAVE.power || (it === 'mush' && SAVE.power > 0)) { sound.play('deny'); toast(L('現在用沒有效果', 'That would not help right now')); return; }
       SAVE.power = p; SAVE.items.splice(i, 1); sound.play(it === 'leaf' ? 'leaf' : 'power'); store(); mapText(); closePanel(); toast(L(`變成${N(POWER_NAME[p])}了！`, `Now ${N(POWER_NAME[p])}!`));
     }, { cls: 'itembtn' })).join('') + `</div>${btn(L('關閉', 'Close'), closePanel)}`;
   });
@@ -241,7 +292,8 @@ function startLevel(id, fromCheck) {
   closePanel();
   if (S.LV) { S.LV.dispose(); } for (const m of ents.values()) scene.remove(m); ents.clear(); for (const a of anims) scene.remove(a.m); anims.length = 0;
   const def = LEVELS[id];
-  S.G = newRun(def, { power: SAVE.power, checkpoint: fromCheck }); S.LV = buildLevel(scene, S.G);
+  const pwing = SAVE.pwing; if (pwing) { SAVE.pwing = false; store(); }
+  S.G = newRun(def, { power: SAVE.power, checkpoint: fromCheck, pwing }); S.LV = buildLevel(scene, S.G);
   const th = S.LV.theme; scene.background = skyTex(th.sky[0], th.sky[1]); scene.fog = new THREE.Fog(th.fog[0], th.fog[1], th.fog[2]);
   if (!heroMesh) { heroMesh = makeHero(); shade(heroMesh); scene.add(heroMesh); scene.add(blob); } heroMesh.visible = true; heroMesh.userData.power = -1; blob.visible = true;
   cam.yaw = def.camYaw; cam.pitch = 0.5; cam.dist = 11; S.camT = null;
@@ -265,7 +317,7 @@ function onEvent(e) {
       if (!e.boss) banner(L('過關！', 'Course clear!'), `${L('得到卡片', 'You got a card')} ${cardImg(e.card)}`); else banner(L('打倒了！', 'Defeated!'), ''); break;
     case 'bossdown': sound.play('bosshit'); break;
     case 'check': sound.play('check'); toast(L('通過中間點！', 'Checkpoint!')); break;
-    case 'jump': case 'stomp': case 'kick': case 'thud': case 'fire': case 'tail': case 'note': case 'hurt': case 'sprout': case 'bosshit': case 'bosshop': case 'bossfire': case 'fly': case 'wag': sound.play(e.t); break;
+    case 'jump': case 'stomp': case 'kick': case 'thud': case 'fire': case 'tail': case 'note': case 'hurt': case 'sprout': case 'bosshit': case 'bosshop': case 'bossfire': case 'fly': case 'wag': case 'splash': case 'swim': case 'hop': case 'statue': case 'unstatue': case 'cannon': case 'wand': sound.play(e.t); break;
   }
   void G;
 }
@@ -288,7 +340,7 @@ function syncEntities(dt) {
   sync(G.enemies, (e) => shade(makeEnemy(e)), (m, e) => poseEnemy(m, e, dt, S.t));
   sync(G.items, (it) => shade(makeItem(it.kind)), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.z + it.d / 2); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
   sync(G.fire, () => makeFireball(), (m, f) => { m.position.set(f.x + f.w / 2, f.y + f.h / 2, f.z + f.d / 2); });
-  sync(G.shots, () => makeShot(), (m, s) => { m.position.set(s.x + 0.3, s.y + 0.2, s.z + 0.3); m.rotation.y = Math.atan2(s.vx, s.vz) + Math.PI / 2; });
+  sync(G.shots, (s) => makeShot(s.kind), (m, s) => { m.position.set(s.x + 0.3, s.y + 0.2, s.z + 0.3); m.rotation.y = Math.atan2(s.vx, s.vz) + Math.PI / 2; });
   for (const [o, m] of ents) if (!seen.has(o)) { scene.remove(m); ents.delete(o); }
 }
 const STEP = 1 / 120;
@@ -303,7 +355,7 @@ function levelStep(dt, held, edge, digital, stick) {
   S.acc += dt; let first = true;
   while (S.acc >= STEP) {
     S.acc -= STEP;
-    const inp = { mx, mz, jump: held.jump, jumpPressed: first && edge.jump, run: held.run, runPressed: first && edge.run, poundPressed: first && edge.pound };
+    const inp = { mx, mz, jump: held.jump, jumpPressed: first && edge.jump, run: held.run, runPressed: first && edge.run, pound: held.pound, poundPressed: first && edge.pound };
     for (const e of step(G, inp, STEP)) onEvent(e);
     first = false;
   }
@@ -321,7 +373,7 @@ function levelDone() {
   }
   store(); toMap();
   if (bonus) { sound.play('oneup'); banner(bonus, ''); }
-  if (id === '1-C') { SAVE.won = true; SAVE.house = false; store(); refreshMap(); ending(); }
+  if (id === '1-A') { SAVE.won = true; SAVE.houses = {}; SAVE.spade = false; store(); refreshMap(); ending(); }
 }
 function gameOver() {
   sound.setSong(null);
@@ -329,7 +381,7 @@ function gameOver() {
 }
 function ending() {
   sound.play('fanfare');
-  showPanel('end', L('葉葉國得救了！', 'Leafy Land is saved!'), () => `<p class="say">${L('龜王被打敗了，葉葉國又恢復了和平。謝謝你，勇敢的小跳跳！蘑菇小屋重新開門了，每一關都可以再玩。', 'The Turtle King is beaten and peace returns to Leafy Land. Thank you, brave hopper! The Mushroom House is open again, and every level can be played again.')}</p>${btn(L('太好了！', 'Hooray!'), closePanel, { cls: 'go' })}`);
+  showPanel('end', L('葉葉國得救了！', 'Leafy Land is saved!'), () => `<p class="say">${L('小王子被打敗了，飛行船墜落，葉葉國的魔杖也被搶回來了！謝謝你，勇敢的小跳跳！蘑菇小屋和翻牌遊戲重新開張，每一關都可以再玩。', 'The little prince is beaten, his airship goes down, and Leafy Land gets its magic wand back! Thank you, brave hopper! The Mushroom Houses and the spade game are open again, and every level can be played again.')}</p>${btn(L('太好了！', 'Hooray!'), closePanel, { cls: 'go' })}`);
 }
 
 // ---------------------------------------------------------------- the frame
@@ -372,12 +424,12 @@ function frame(now) {
 let hudT = 0;
 
 // ---------------------------------------------------------------- start
-const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移動 · 右搖桿 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B／X 跑步＋攻擊 · Y／LT 在空中 屁股蹬地 · Start 選單', 'Controller: left stick move · right stick turns the camera · A jump (with the leaf, tap in the air to fly) · B / X run and attack · Y / LT in the air: ground pound · Start menu')
+const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移動 · 右搖桿 轉視角 · A 跳／游泳（有尾巴時在空中連按可以飛）· B／X 跑步＋攻擊 · Y／LT 屁股蹬地、狸貓石像、青蛙下潛 · Start 選單', 'Controller: left stick move · right stick camera · A jump / swim (with a tail, tap in the air to fly) · B / X run and attack · Y / LT ground pound, Tanooki statue, Frog dive · Start menu')
   : matchMedia('(pointer: coarse)').matches ? L('觸控：方向鈕 移動 · 拖曳畫面 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B 跑步＋攻擊 · ⤓ 屁股蹬地', 'Touch: arrows move · drag the screen to turn the camera · A jump (with the leaf, tap in the air to fly) · B run and attack · ⤓ ground pound')
-    : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（拿著葉子在空中連按可以飛）· Shift／X 跑步＋丟火球／甩尾巴 · 在空中按 C 屁股蹬地 · Q／E 或拖曳 轉視角 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with the leaf, tap in the air to fly) · Shift / X run, throw fire, swing your tail · C in the air: ground pound · Q / E or drag: turn the camera · Esc menu');
+    : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（有尾巴時在空中連按可以飛；水裡按跳游泳）· Shift／X 跑步＋丟火球／甩尾巴 · C：空中屁股蹬地；狸貓裝在地上按住變石像；青蛙裝在水裡往下潛 · Q／E 或拖曳 轉視角 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with a tail, tap in the air to fly; in water, jump swims) · Shift / X run, throw fire, swing your tail · C: ground pound in the air; hold on the ground in the Tanooki Suit to turn to stone; dive in the Frog Suit · Q / E or drag: turn the camera · Esc menu');
 function staticText() {
   document.documentElement.lang = EN() ? 'en' : 'zh-Hant';
-  $('t-sub').textContent = L('在 3D 的葉葉國裡自由奔跑！頂方塊、踩扁敵人、屁股蹬地，吃下神奇葉子在天上飛，穿過八個關卡打倒龜王。（簡單模式）', 'Run free through a 3D Leafy Land! Bop blocks, stomp baddies, ground-pound, and grab the Super Leaf to fly through eight levels to the Turtle King. (Easy mode)');
+  $('t-sub').textContent = L('在 3D 的葉葉國裡冒險！穿上狸貓裝飛上天、變成石像，穿上青蛙裝在海底游泳，翻黑桃卡、逛蘑菇小屋，最後登上飛行船打倒小王子。（簡單模式）', 'Adventure through a 3D Leafy Land! Fly and turn to stone in the Tanooki Suit, swim the bay in the Frog Suit, play the spade cards, visit the Mushroom Houses, and board the airship to beat the little prince. (Easy mode)');
   $('t-play').textContent = hadSave ? L('繼續冒險', 'Continue') : L('開始', 'Start');
   $('t-lang').textContent = EN() ? '中文' : 'English';
   $('t-help').textContent = helpText();
@@ -395,4 +447,4 @@ $('t-play').onclick = play;
 $('t-lang').onclick = () => setLang(EN() ? 'zh' : 'en');
 staticText(); refreshMap(); hud();
 requestAnimationFrame(frame);
-window.__ll = { S, get SAVE() { return SAVE; }, play, startLevel, toMap, menuPanel, itemsPanel, housePanel, frame: (now) => frame(now), keys, tapped };
+window.__ll = { S, get SAVE() { return SAVE; }, play, startLevel, toMap, menuPanel, itemsPanel, housePanel, spadePanel, frame: (now) => frame(now), keys, tapped };

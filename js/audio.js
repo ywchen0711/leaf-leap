@@ -39,6 +39,13 @@ export class Sound {
       case 'tail': this.noise(t, 0.2, 1400, 0.16, 'bandpass'); break;
       case 'fly': case 'wag': this.tone(t, 600, 0.06, 'triangle', 0.06, 900); break;
       case 'note': this.tone(t, 400, 0.12, 'triangle', 0.12, 900); break;
+      case 'splash': this.noise(t, 0.4, 900, 0.25); this.noise(t, 0.2, 3000, 0.08, 'highpass'); break;
+      case 'swim': this.tone(t, 300, 0.12, 'triangle', 0.08, 500); this.noise(t, 0.1, 1200, 0.05); break;
+      case 'hop': this.tone(t, 500, 0.08, 'square', 0.04, 800); break;
+      case 'statue': this.tone(t, 200, 0.3, 'square', 0.08, 90); this.noise(t, 0.25, 500, 0.2); break;
+      case 'unstatue': this.tone(t, 300, 0.15, 'triangle', 0.08, 700); break;
+      case 'cannon': this.noise(t, 0.35, 250, 0.35); this.tone(t, 90, 0.3, 'triangle', 0.15, 40); break;
+      case 'wand': this.seq(t, [1319, 1568, 2093], 0.04, 'square', 0.05); break;
       case 'pound': this.noise(t, 0.3, 300, 0.4); this.tone(t, 120, 0.25, 'triangle', 0.18, 50); break;
       case 'pipe': this.seq(t, [400, 300, 200, 400, 300, 200], 0.06, 'square', 0.05); break;
       case 'die': this.seq(t, [523, 0, 494, 466, 440, 0, 330, 262], 0.11, 'square', 0.07); break;
@@ -68,6 +75,10 @@ export class Sound {
         [null, null, 24, null, null, 27, null, null, 26, null, null, 22, null, null, 24, null, null, null, 29, null, 27, null, 26, null, 24, null, null, null, 22, null, 19, null]],
       fort: [132, 220, [0, 0, 0, 0, 1, 1, 1, 1, 0, 0, 0, 0, -1, -1, -1, -1, 0, 0, 0, 0, 1, 1, 1, 1, 3, 3, 3, 3, 1, 1, 1, 1],
         [12, null, 15, null, 13, null, 12, null, 11, null, 12, null, 13, null, 15, null, 17, null, 15, null, 13, null, 12, null, 15, 13, 12, 11, 12, null, null, null]],
+      water: [100, 220, [0, null, 4, null, 7, null, 4, null, 5, null, 9, null, 12, null, 9, null, 7, null, 11, null, 14, null, 11, null, 0, null, 4, null, 7, null, 12, null],
+        [24, null, 26, 28, null, 31, 28, null, 29, null, 26, 24, null, 21, null, null, 23, null, 26, 28, null, 26, 23, null, 24, null, null, null, 19, null, 16, null]],
+      airship: [148, 196, [0, 0, 0, 0, 3, 3, 3, 3, 5, 5, 5, 5, 6, 6, 7, 7, 0, 0, 0, 0, 3, 3, 3, 3, 8, 8, 7, 7, 5, 5, 3, 3],
+        [12, null, 15, 12, 17, null, 15, 12, 19, 18, 17, 15, 18, null, 19, null, 12, null, 15, 12, 17, null, 15, 12, 20, 19, 17, 15, 12, null, null, null]],
       map: [112, 261.6, [0, null, 7, null, 0, null, 7, null, 5, null, 0, null, 7, null, 2, null, 0, null, 7, null, 0, null, 7, null, 5, null, 7, null, 0, null, null, null],
         [12, 12, 14, 16, null, 16, 17, 19, null, 21, 19, 17, 16, null, 14, null, 12, 12, 14, 16, null, 19, 17, 16, 14, null, 11, null, 12, null, null, null]],
     };
