@@ -1,6 +1,6 @@
-// LEAF LEAP — what you see: pixel-art blocks in 3D, backdrops for each theme, the hero, enemies, items and effects.
+// LEAF LEAP 3D — what you see: pixel-art blocks, round pipes, scenery for each theme, the hero, enemies, items and effects.
 import * as THREE from 'three';
-import { T, cardAt } from './game.js';
+import { T, cardAt, tileAt, isSolid } from './game.js';
 
 // ---------------------------------------------------------------- pixel textures (16 × 16, drawn sharp)
 const cache = new Map();
@@ -26,6 +26,8 @@ const TEX = {
   cloud: () => px('cloud', (g) => { rect(g, '#ffffff', 0, 0, 16, 16); rect(g, '#cfe6ff', 0, 11, 16, 5); for (const x of [1, 6, 11]) rect(g, '#ffffff', x, 10, 4, 2); rect(g, '#3a3a5a', 5, 5, 1, 2); rect(g, '#3a3a5a', 10, 5, 1, 2); }),
   note: () => px('note', (g) => { rect(g, '#fff8f0', 0, 0, 16, 16); rect(g, '#c8b8a8', 0, 15, 16, 1); rect(g, '#c8b8a8', 15, 0, 1, 16); pattern(g, ['....11', '....1.1', '....1..1', '....1..', '....1..', '..111..', '.1111..', '.111...'], { 1: '#1a1a1a' }, 4, 4); }),
   lava: () => px('lava', (g) => { rect(g, '#ff5a10', 0, 0, 16, 16); for (let x = 0; x < 16; x++) { const y = 2 + Math.round(Math.sin(x / 2.5) * 1.5); rect(g, '#ffd040', x, y, 1, 2); } rect(g, '#c82a00', 0, 10, 16, 6); }),
+  grasstop: () => px('grasstop', (g) => { rect(g, '#4ac83a', 0, 0, 16, 16); for (const [x, y] of [[2, 3], [9, 2], [13, 9], [5, 11], [11, 13], [7, 6]]) { rect(g, '#7ae05a', x, y, 2, 1); rect(g, '#2a9a2a', x + 1, y + 1, 1, 1); } }),
+  checker: () => px('checker', (g) => { for (let y = 0; y < 4; y++) for (let x = 0; x < 4; x++) rect(g, (x + y) % 2 ? '#1a1a1a' : '#ffffff', x * 4, y * 4, 4, 4); }),
   stone: () => px('stone', (g) => { rect(g, '#8a8a98', 0, 0, 16, 16); g.fillStyle = '#4a4a58'; for (let y = 0; y < 16; y += 8) { g.fillRect(0, y + 7, 16, 1); const o = (y / 8) % 2 ? 8 : 0; g.fillRect(o, y, 1, 7); } rect(g, '#b8b8c8', 0, 0, 16, 1); }),
 };
 const mats = new Map();
@@ -35,74 +37,115 @@ export function cmat(c, emissive) { const k = c + (emissive || ''); if (!colMat.
 const BOX = new THREE.BoxGeometry(1, 1, 1);
 const box = (w, h, d, c, x = 0, y = 0, z = 0) => { const m = new THREE.Mesh(BOX, cmat(c)); m.scale.set(w, h, d); m.position.set(x, y, z); return m; };
 
-// which look each tile gets
-function look(L, x, y) {
-  const t = L.tiles[y * L.w + x];
-  switch (t) {
-    case T.GROUND: return y + 1 < L.h && L.tiles[(y + 1) * L.w + x] === T.GROUND ? 'dirt' : 'grass';
+// which look each block gets
+function look(L, x, y, z) {
+  switch (tileAt(L, x, y, z)) {
+    case T.GROUND: return tileAt(L, x, y + 1, z) === T.GROUND ? 'dirt' : 'grass';
     case T.BRICK: return 'brick'; case T.QCOIN: case T.QLEAF: case T.QFLOWER: case T.Q1UP: return 'q'; case T.USED: return 'used';
-    case T.HARD: return 'wood'; case T.PIPE: return 'pipe'; case T.PIPETOP: return 'pipetop'; case T.CLOUD: return 'cloud'; case T.NOTE: return 'note';
+    case T.HARD: return 'wood'; case T.CLOUD: return 'cloud'; case T.NOTE: return 'note';
     case T.LAVA: return 'lava'; case T.STONE: return 'stone'; default: return null;
   }
 }
-// ---------------------------------------------------------------- a level's blocks and backdrop
+const faceMats = new Map();
+function lookMat(k) {
+  if (!faceMats.has(k)) {
+    let m;
+    if (k === 'grass') { const side = mat('grass'); m = [side, side, mat('grasstop'), mat('dirt'), side, side]; }
+    else if (k === 'lava') m = mat('lava', { emissive: '#ff4000', emissiveIntensity: 0.6 });
+    else m = mat(k);
+    faceMats.set(k, m);
+  }
+  return faceMats.get(k);
+}
+// a round pipe over its 2 × 2 blocks
+function pipeMesh(x, z, base, hgt) {
+  const g = new THREE.Group(), green = cmat('#2ab82a'), light = cmat('#5ad84a');
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 0.9, hgt - 0.5, 20), green); body.position.y = (hgt - 0.5) / 2;
+  const rim = new THREE.Mesh(new THREE.CylinderGeometry(1.06, 1.06, 0.55, 20), light); rim.position.y = hgt - 0.27;
+  const hole = new THREE.Mesh(new THREE.CircleGeometry(0.78, 20), cmat('#0a2a0a')); hole.rotation.x = -Math.PI / 2; hole.position.y = hgt + 0.03;
+  g.add(body, rim, hole); g.position.set(x + 1, base, z + 1);
+  g.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  return g;
+}
+// ---------------------------------------------------------------- a level's blocks and scenery
 export function buildLevel(scene, G) {
-  const group = new THREE.Group(), L = G.L, theme = L.theme; scene.add(group);
+  const group = new THREE.Group(), L = G.L, theme = L.theme, def = G.def; scene.add(group);
   const THEME = {
-    grass: { sky: ['#5ab4ff', '#c8ecff'], light: 1 }, sky: { sky: ['#3a9aff', '#e0f4ff'], light: 1.05 }, cave: { sky: ['#06080f', '#1a2240'], light: 0.75 },
-    fort: { sky: ['#12101a', '#3a2a3a'], light: 0.8 }, castle: { sky: ['#1a0808', '#4a1a14'], light: 0.8 },
+    grass: { sky: ['#4aa8ff', '#d0f0ff'], fog: ['#cfeaff', 40, 140] }, sky: { sky: ['#2a8aff', '#e8f6ff'], fog: ['#e0f2ff', 45, 150] },
+    cave: { sky: ['#05070d', '#141a30'], fog: ['#0a0e1a', 18, 60] }, fort: { sky: ['#100e16', '#2a2030'], fog: ['#1a1620', 20, 70] }, castle: { sky: ['#180606', '#3a1410'], fog: ['#2a0c08', 20, 70] },
   }[theme];
   let tileGroup = new THREE.Group(); group.add(tileGroup);
   const coinGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.1, 14); coinGeo.rotateX(Math.PI / 2);
   const coinMat = new THREE.MeshLambertMaterial({ color: '#ffd030', emissive: '#7a5000' });
   let coinMesh = null;
+  const filled = (x, y, z) => x >= 0 && x < L.w && z >= 0 && z < L.d && y >= 0 && y < L.h && isSolid(L.tiles[(y * L.d + z) * L.w + x]) && L.tiles[(y * L.d + z) * L.w + x] !== T.PIPE && L.tiles[(y * L.d + z) * L.w + x] !== T.PIPETOP;
   function rebuild() {
     group.remove(tileGroup); tileGroup.traverse((o) => { if (o.isInstancedMesh) o.dispose(); }); tileGroup = new THREE.Group(); group.add(tileGroup);
     const lists = {}, coins = [];
-    for (let y = 0; y < L.h; y++) for (let x = 0; x < L.w; x++) { const t = L.tiles[y * L.w + x]; if (t === T.COIN) { coins.push([x, y]); continue; } const k = look(L, x, y); if (k) (lists[k] = lists[k] || []).push([x, y]); }
+    for (let y = 0; y < L.h; y++) for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) {
+      const t = L.tiles[(y * L.d + z) * L.w + x];
+      if (t === T.EMPTY || t === T.PIPE || t === T.PIPETOP) continue;
+      if (t === T.COIN) { coins.push([x, y, z]); continue; }
+      // only blocks you can see: at least one side open
+      if (isSolid(t) && filled(x + 1, y, z) && filled(x - 1, y, z) && filled(x, y + 1, z) && filled(x, y - 1, z) && filled(x, y, z + 1) && filled(x, y, z - 1)) continue;
+      const k = look(L, x, y, z); if (k) (lists[k] = lists[k] || []).push([x, y, z]);
+    }
     const m4 = new THREE.Matrix4();
     for (const [k, list] of Object.entries(lists)) {
-      const im = new THREE.InstancedMesh(BOX, mat(k, k === 'lava' ? { emissive: '#ff4000', emissiveIntensity: 0.6 } : {}), list.length);
-      list.forEach(([x, y], i) => { const sx = k === 'pipetop' ? 1.14 : k === 'pipe' ? 1.0 : 1, sy = k === 'cloud' ? 0.6 : k === 'lava' ? 0.85 : 1; m4.makeScale(sx, sy, k === 'pipetop' ? 1.14 : 1); m4.setPosition(x + 0.5, y + (k === 'cloud' ? 0.7 : k === 'lava' ? 0.42 : 0.5), 0); im.setMatrixAt(i, m4); });
-      tileGroup.add(im);
+      const im = new THREE.InstancedMesh(BOX, lookMat(k), list.length);
+      list.forEach(([x, y, z], i) => { const sy = k === 'cloud' ? 0.6 : k === 'lava' ? 0.85 : 1; m4.makeScale(1, sy, 1); m4.setPosition(x + 0.5, y + (k === 'cloud' ? 0.7 : k === 'lava' ? 0.42 : 0.5), z + 0.5); im.setMatrixAt(i, m4); });
+      im.castShadow = k !== 'lava'; im.receiveShadow = true; tileGroup.add(im);
     }
-    coinMesh = coins.length ? new THREE.InstancedMesh(coinGeo, coinMat, coins.length) : null; if (coinMesh) { coinMesh.userData.list = coins; tileGroup.add(coinMesh); }
+    coinMesh = coins.length ? new THREE.InstancedMesh(coinGeo, coinMat, coins.length) : null; if (coinMesh) { coinMesh.userData.list = coins; coinMesh.castShadow = true; tileGroup.add(coinMesh); }
   }
   rebuild();
-  // the backdrop
+  for (const p of def.pipes || []) group.add(pipeMesh(p.x, p.z, p.base, p.hgt));
+  // scenery
   const back = new THREE.Group(); group.add(back);
-  const rnd = mulberry(L.w * 7 + L.h);
+  const rnd = mulberry(L.w * 7 + L.d);
   if (theme === 'grass' || theme === 'sky') {
-    const hillCols = ['#4ac85a', '#7ae07a', '#2aa84a'];
-    if (theme === 'grass') for (let x = -10; x < L.w + 20; x += 9 + rnd() * 12) {
-      const r = 3 + rnd() * 5, m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), cmat(hillCols[Math.floor(rnd() * 3)])); m.scale.set(r * 0.8, r * 1.7, 1); m.position.set(x, 0, -6 - rnd() * 8); back.add(m);
-      for (let i = 0; i < 3; i++) { const d = box(0.3, 0.6, 0.1, '#1a6a2a', x + (rnd() - 0.5) * r, 2 + rnd() * r * 0.8, m.position.z + 1); back.add(d); }
+    if (theme === 'grass') {
+      const land = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 400, 400), cmat('#5ab84a')); land.rotation.x = -Math.PI / 2; land.position.set(L.w / 2, -9, L.d / 2); back.add(land);
+      const hillCols = ['#4ac85a', '#7ae07a', '#2aa84a'];
+      for (let i = 0; i < 40; i++) {
+        const side = i % 2 ? -1 : 1, r = 5 + rnd() * 9, x = -30 + rnd() * (L.w + 60), z = side > 0 ? L.d + 18 + rnd() * 50 : -18 - rnd() * 50;
+        const m = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 12, 0, Math.PI * 2, 0, Math.PI / 2), cmat(hillCols[Math.floor(rnd() * 3)])); m.scale.set(r, r * (1.2 + rnd()), r); m.position.set(x, -9, z); back.add(m);
+      }
+      for (let i = 0; i < 50; i++) { const x = -20 + rnd() * (L.w + 40), z = rnd() < 0.5 ? L.d + 8 + rnd() * 25 : -8 - rnd() * 25; const t = new THREE.Group(), tr = box(0.6, 3, 0.6, '#7a4a1a', 0, 1.5, 0), top = new THREE.Mesh(new THREE.SphereGeometry(1.8, 10, 8), cmat(rnd() < 0.5 ? '#2a9a3a' : '#3ab84a')); top.position.y = 4; t.add(tr, top); t.position.set(x, -9, z); back.add(t); }
+    } else {
+      const sea = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 400, 400), new THREE.MeshBasicMaterial({ color: '#f4fbff' })); sea.rotation.x = -Math.PI / 2; sea.position.set(L.w / 2, -14, L.d / 2); back.add(sea);
     }
-    for (let x = 0; x < L.w + 20; x += 7 + rnd() * 10) {
-      const g = new THREE.Group(), y = theme === 'sky' ? 1 + rnd() * 12 : 9 + rnd() * 4;
-      for (let i = 0; i < 3; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.8 + (i === 1 ? 0.4 : 0), 12, 8), cmat('#ffffff', '#a8b8c8')); s.position.set(i * 0.9, i === 1 ? 0.3 : 0, 0); g.add(s); }
-      g.position.set(x, y, -10 - rnd() * 6); back.add(g);
+    for (let i = 0; i < 36; i++) {
+      const g = new THREE.Group(), y = theme === 'sky' ? -10 + rnd() * 26 : 12 + rnd() * 10;
+      for (let k = 0; k < 3; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(1.4 + (k === 1 ? 0.6 : 0), 12, 8), cmat('#ffffff', '#b0c0d0')); s.position.set(k * 1.6, k === 1 ? 0.5 : 0, 0); g.add(s); }
+      g.position.set(-20 + rnd() * (L.w + 40), y, rnd() < 0.5 ? -10 - rnd() * 40 : L.d + 14 + rnd() * 30); back.add(g);
     }
-    if (theme === 'grass') for (let x = 4; x < L.w; x += 6 + rnd() * 9) { if (L.tiles[1 * L.w + Math.floor(x)] !== T.GROUND) continue; const b = new THREE.Group(); for (let i = 0; i < 3; i++) { const s = new THREE.Mesh(new THREE.SphereGeometry(0.5 + (i === 1 ? 0.2 : 0), 10, 8), cmat('#2ac84a')); s.position.set(i * 0.6, 0, 0); b.add(s); } b.position.set(x, 2.2, -1.3); back.add(b); }
-    if (theme === 'sky') { const sea = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 80, 30), new THREE.MeshBasicMaterial({ color: '#f4fbff' })); sea.position.set(L.w / 2, -14, -16); back.add(sea); }
   } else if (theme === 'cave') {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 60, 30), new THREE.MeshLambertMaterial({ map: TEX.stone(), color: '#2a3048' })); wall.material.map = TEX.stone().clone(); wall.material.map.wrapS = wall.material.map.wrapT = THREE.RepeatWrapping; wall.material.map.repeat.set((L.w + 60) / 2, 15); wall.material.map.needsUpdate = true; wall.position.set(L.w / 2, 7, -3); back.add(wall);
-    for (let x = 3; x < L.w; x += 5 + rnd() * 6) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.4, 1.4 + rnd(), 6), cmat('#4a4a68')); s.rotation.x = Math.PI; s.position.set(x, 11.3, -1); back.add(s); }
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 60, 30), new THREE.MeshLambertMaterial({ color: '#2a3048' })); wall.position.set(L.w / 2, 7, -1.5); back.add(wall);
+    for (let x = 3; x < L.w; x += 4 + rnd() * 5) for (const z of [1 + rnd() * 3, L.d - 2 - rnd() * 3]) { const s = new THREE.Mesh(new THREE.ConeGeometry(0.35, 1.2 + rnd(), 6), cmat('#4a4a68')); s.rotation.x = Math.PI; s.position.set(x, 9.4, z); back.add(s); }
   } else {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 60, 30), new THREE.MeshLambertMaterial({ color: theme === 'castle' ? '#3a2228' : '#2a2a38' })); wall.position.set(L.w / 2, 7, -3); back.add(wall);
-    for (let x = 4; x < L.w; x += 8) { const w = box(1.2, 2, 0.1, '#ff8a3a', x, 7, -2.9); w.material = cmat('#ff8a3a', '#a03000'); back.add(w); }
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(L.w + 60, 30), new THREE.MeshLambertMaterial({ color: theme === 'castle' ? '#3a2228' : '#2a2a38' })); wall.position.set(L.w / 2, 7, -1.5); back.add(wall);
+    for (let x = 4; x < L.w; x += 8) { const w = box(1.2, 2, 0.1, '#ff8a3a', x, 7, -1.4); w.material = cmat('#ff8a3a', '#a03000'); back.add(w); }
   }
   // the checkpoint flag
-  if (G.def.check != null) { const f = new THREE.Group(); f.add(box(0.12, 3, 0.12, '#e8e8e8', 0, 1.5, 0), box(0.9, 0.6, 0.05, '#ff4a6a', 0.5, 2.6, 0)); f.position.set(G.def.check + 0.5, G.def.checkY, -0.6); group.add(f); group.userData.flag = f; }
-  // the goal: a box of spinning cards
+  if (def.check) { const [cx, cy, cz] = def.check, f = new THREE.Group(); f.add(box(0.12, 3, 0.12, '#e8e8e8', 0, 1.5, 0), box(0.9, 0.6, 0.05, '#ff4a6a', 0.5, 2.6, 0)); f.position.set(cx + 0.5, cy, cz - 1.5); f.traverse((o) => { if (o.isMesh) o.castShadow = true; }); group.add(f); }
+  // the goal: a finish line across the course, and a box of spinning cards above it
   let goal = null;
-  if (G.goal) { goal = new THREE.Mesh(BOX, [0, 1, 2, 3, 4, 5].map(() => new THREE.MeshLambertMaterial({ map: cardTex('mush'), emissive: '#202020' }))); goal.scale.setScalar(1.1); goal.position.set(G.goal.x + 0.5, G.goal.y + 0.5, 0); group.add(goal); const frame = box(1.3, 1.3, 0.2, '#101010', G.goal.x + 0.5, G.goal.y + 0.5, -0.7); group.add(frame); }
+  if (G.goal) {
+    const gx = G.goal.x + 0.8, fy = Math.max(0, Math.floor(G.goal.y) - 0.98);
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(1, L.d), new THREE.MeshLambertMaterial({ map: (() => { const t = TEX.checker().clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, L.d); t.needsUpdate = true; return t; })() }));
+    line.rotation.x = -Math.PI / 2; line.position.set(gx, G.goal.y - 0.78, L.d / 2); group.add(line);
+    for (const z of [-0.2, L.d + 0.2]) { const post = box(0.25, 6, 0.25, '#f8f8f8', gx, G.goal.y - 0.8 + 3, z); post.castShadow = true; group.add(post); }
+    group.add(box(0.25, 0.25, L.d + 0.6, '#f8f8f8', gx, G.goal.y + 5, L.d / 2));
+    goal = new THREE.Mesh(BOX, [0, 1, 2, 3, 4, 5].map(() => new THREE.MeshLambertMaterial({ map: cardTex('mush'), emissive: '#303030' }))); goal.scale.setScalar(1.4); goal.position.set(gx, G.goal.y + 3.6, G.goal.z + 0.5); goal.castShadow = true; group.add(goal);
+    void fy;
+  }
   const lastCard = { k: '' };
   return {
     group, theme: THEME, rebuild,
     update(t) {
-      if (coinMesh) { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), s = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t * 3); coinMesh.userData.list.forEach(([x, y], i) => { p.set(x + 0.5, y + 0.5, 0); m4.compose(p, q, s); coinMesh.setMatrixAt(i, m4); }); coinMesh.instanceMatrix.needsUpdate = true; }
-      if (goal) { const k = G.cleared || cardAt(G.t); if (k !== lastCard.k) { lastCard.k = k; goal.material.forEach((m) => { m.map = cardTex(k); m.needsUpdate = true; }); } goal.rotation.y = G.cleared ? goal.rotation.y : Math.sin(t * 2) * 0.3; if (G.cleared) goal.position.y += 0.05; }
+      if (coinMesh) { const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t * 3); coinMesh.userData.list.forEach(([x, y, z], i) => { p.set(x + 0.5, y + 0.5, z + 0.5); m4.compose(p, q, sc); coinMesh.setMatrixAt(i, m4); }); coinMesh.instanceMatrix.needsUpdate = true; }
+      if (goal) { const k = G.cleared || cardAt(G.t); if (k !== lastCard.k) { lastCard.k = k; goal.material.forEach((m) => { m.map = cardTex(k); m.needsUpdate = true; }); } goal.rotation.y = t * 1.5; if (G.cleared) goal.position.y += 0.04; }
       const lava = mats.get('lava'); if (lava) lava.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.15;
     },
     dispose() { scene.remove(group); group.traverse((o) => { if (o.isInstancedMesh) o.dispose(); else if (o.geometry && o.geometry !== BOX) o.geometry.dispose(); }); },
@@ -153,13 +196,14 @@ export function poseHero(m, h, dt, t) {
     u.ears.visible = u.tail.visible = h.power === 3;
   }
   const s = h.power ? 1 : 0.56; u.inner.scale.set(h.power ? 1 : 0.95, s, h.power ? 1 : 0.95);
-  m.position.set(h.x + h.w / 2, h.y, 0.1);
-  const face = h.dir > 0 ? Math.PI / 2 - 0.45 : -Math.PI / 2 + 0.45;
-  m.rotation.y += (face - m.rotation.y) * Math.min(1, dt * 18);
+  m.position.set(h.x + h.w / 2, h.y, h.z == null ? 0.1 : h.z + h.d / 2);
+  const face = h.face == null ? 0 : h.face, dA = ((face - m.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
+  m.rotation.y += dA * Math.min(1, dt * 16);
   if (h.spin > 0) u.inner.rotation.y = (0.32 - h.spin) / 0.32 * Math.PI * 2; else u.inner.rotation.y = 0;
-  if (h.dead) { u.inner.rotation.y = 0; m.rotation.y = 0; u.armL.rotation.z = -2.6; u.armR.rotation.z = 2.6; u.legL.rotation.x = u.legR.rotation.x = 0; return; }
+  if (h.dead) { u.inner.rotation.y = 0; u.armL.rotation.z = -2.6; u.armR.rotation.z = 2.6; u.legL.rotation.x = u.legR.rotation.x = 0; return; }
   u.armL.rotation.z = u.armR.rotation.z = 0;
-  const speed = Math.abs(h.vx);
+  const speed = Math.hypot(h.vx, h.vz || 0);
+  if (h.pound) { u.inner.rotation.x = h.pound === 1 ? (0.18 - h.poundT) / 0.18 * Math.PI * 2 : 0; u.legL.rotation.x = u.legR.rotation.x = -1.2; return; } u.inner.rotation.x = 0;
   if (!h.onGround) { u.legL.rotation.x = -0.8; u.legR.rotation.x = 0.5; u.armL.rotation.x = -2.6; u.armR.rotation.x = 0.4; if (h.flyT > 0 || h.wag > 0) u.armL.rotation.x = u.armR.rotation.x = -1.4 + Math.sin(t * 30) * 0.6; }
   else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 0.9; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; }
   u.tail.rotation.y = Math.sin(t * (h.wag > 0 || h.flyT > 0 ? 40 : 4)) * 0.5;
@@ -195,9 +239,9 @@ export function makeEnemy(e) {
 }
 export function poseEnemy(m, e, dt, t) {
   const u = m.userData;
-  m.position.set(e.x + e.w / 2, e.y, 0);
-  if (e.kind === 'plant') { m.position.y = e.y; const open = 0.35 + Math.sin(t * 8) * 0.25; u.top.rotation.x = -open; u.bot.rotation.x = Math.PI + open; m.rotation.y = 0; return; }
-  m.rotation.y = e.vx > 0 ? Math.PI / 2 - 0.3 : -Math.PI / 2 + 0.3;
+  m.position.set(e.x + e.w / 2, e.y, e.z + e.d / 2);
+  if (e.face != null) m.rotation.y = e.face;
+  if (e.kind === 'plant') { const open = 0.35 + Math.sin(t * 8) * 0.25; u.top.rotation.x = -open; u.bot.rotation.x = Math.PI + open; return; }
   if (e.flip) { u.inner.rotation.z = Math.PI; u.inner.position.y = 0.8; }
   if (!e.alive && e.how === 'stomp') { u.inner.scale.y = 0.25; return; }
   if (e.kind === 'walker') { u.wings.visible = !!e.wings; u.wings.children.forEach((w) => { w.rotation.z = w.userData.s * (0.4 + Math.sin(t * 16) * 0.5); }); u.inner.rotation.z = e.flip ? Math.PI : Math.sin(t * 8) * 0.12; }

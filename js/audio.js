@@ -1,4 +1,4 @@
-// LEAF LEAP — chiptune sound, synthesized with the Web Audio API: square-wave effects and a tune for each place.
+// LEAF LEAP 3D — chiptune sound, synthesized with the Web Audio API: square-wave effects and a tune for each place.
 export class Sound {
   constructor() { this.ctx = null; this.vol = 0.55; this.musicOn = true; this.song = null; this.last = {}; }
   start() {
@@ -39,6 +39,7 @@ export class Sound {
       case 'tail': this.noise(t, 0.2, 1400, 0.16, 'bandpass'); break;
       case 'fly': case 'wag': this.tone(t, 600, 0.06, 'triangle', 0.06, 900); break;
       case 'note': this.tone(t, 400, 0.12, 'triangle', 0.12, 900); break;
+      case 'pound': this.noise(t, 0.3, 300, 0.4); this.tone(t, 120, 0.25, 'triangle', 0.18, 50); break;
       case 'pipe': this.seq(t, [400, 300, 200, 400, 300, 200], 0.06, 'square', 0.05); break;
       case 'die': this.seq(t, [523, 0, 494, 466, 440, 0, 330, 262], 0.11, 'square', 0.07); break;
       case 'clear': this.seq(t, [523, 659, 784, 1047, 0, 784, 1047, 1319], 0.1, 'square', 0.07); break;

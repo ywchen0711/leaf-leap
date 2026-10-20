@@ -1,6 +1,6 @@
-// LEAF LEAP — the page: the title curtain, the world map, playing a level, the HUD, panels, input and the save.
+// LEAF LEAP 3D — the page: the title curtain, the world map, playing a level in 3D, the HUD, panels, input and the save.
 import * as THREE from 'three';
-import { newRun, step } from './game.js';
+import { newRun, step, floorBelow } from './game.js';
 import { LEVELS, MAP } from './levels.js';
 import { buildLevel, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js';
 import { Sound } from './audio.js';
@@ -25,9 +25,13 @@ const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SAVE)); } c
 const canvas = $('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.outputColorSpace = THREE.SRGBColorSpace;
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(30, 1, 0.5, 400);
+// (?fx=low turns shadows off, for slow machines)
+const LOWFX = q.get('fx') === 'low';
+renderer.shadowMap.enabled = !LOWFX; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(48, 1, 0.3, 600);
 scene.add(new THREE.HemisphereLight('#ffffff', '#9a8a7a', 1.35));
-const sun = new THREE.DirectionalLight('#fff8e8', 1.5); sun.position.set(-3, 6, 10); scene.add(sun);
+const sun = new THREE.DirectionalLight('#fff8e8', 1.5); sun.position.set(-3, 6, 10); scene.add(sun, sun.target);
+sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -20, right: 20, top: 20, bottom: -20, near: 1, far: 80 }); sun.shadow.bias = -0.0006;
 function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); }
 addEventListener('resize', resize); resize();
 const sound = new Sound();
@@ -75,13 +79,22 @@ const mapHero = makeHero(); mapHero.scale.setScalar(0.6); mapGroup.add(mapHero);
 const passable = (i) => nodes[i].kind === 'start' || nodes[i].kind === 'house' || !!SAVE.cleared[nodes[i].id];
 
 // ---------------------------------------------------------------- state
-const S = { mode: 'title', panel: null, G: null, LV: null, endT: 0, deadT: 0, walk: null, acc: 0, t: 0 };
+const S = { mode: 'title', panel: null, G: null, LV: null, endT: 0, deadT: 0, walk: null, acc: 0, t: 0, shake: 0 };
+const cam = { yaw: 0, pitch: 0.5, dist: 11 };
+const blob = new THREE.Mesh(new THREE.CircleGeometry(0.42, 20), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false })); blob.rotation.x = -Math.PI / 2; blob.visible = false;
+const shade = (m) => { m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return m; };
+// dragging on the screen (mouse or finger, away from the buttons) turns the camera
+let drag = null;
+canvas.addEventListener('pointerdown', (e) => { if (S.mode === 'level' && !S.panel) drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; });
+addEventListener('pointermove', (e) => { if (!drag || e.pointerId !== drag.id) return; cam.yaw -= (e.clientX - drag.x) * 0.006; cam.pitch = Math.max(0.15, Math.min(1.2, cam.pitch + (e.clientY - drag.y) * 0.004)); drag.x = e.clientX; drag.y = e.clientY; });
+addEventListener('pointerup', () => { drag = null; }); addEventListener('pointercancel', () => { drag = null; });
+canvas.addEventListener('wheel', (e) => { cam.dist = Math.max(7, Math.min(24, cam.dist * (e.deltaY > 0 ? 1.1 : 0.9))); e.preventDefault(); }, { passive: false });
 let heroMesh = null;
 const ents = new Map(), anims = [];
 
 // ---------------------------------------------------------------- input: keyboard, controller and touch all become the same buttons
 const keys = new Set(), tapped = new Set();
-const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pause: ['Escape', 'KeyP'], confirm: ['Enter'] };
+const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pound: ['KeyC', 'KeyL', 'ControlLeft'], camL: ['KeyQ'], camR: ['KeyE'], pause: ['Escape', 'KeyP'], confirm: ['Enter'] };
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return; sound.start();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -89,7 +102,7 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 const touchHeld = {};
-for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-pause', 'pause']]) {
+for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-c', 'pound'], ['t-pause', 'pause']]) {
   const b = $(id); const on = (e) => { e.preventDefault(); sound.start(); if (!touchHeld[k]) tapped.add(k); touchHeld[k] = true; b.classList.add('on'); }, off = () => { touchHeld[k] = false; b.classList.remove('on'); };
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
 }
@@ -98,19 +111,22 @@ addEventListener('gamepadconnected', (e) => { PAD.connected = true; sound.start(
 addEventListener('gamepaddisconnected', () => { PAD.connected = [...(navigator.getGamepads ? navigator.getGamepads() : [])].some(Boolean); staticText(); });
 let prevHeld = {};
 function readButtons() {
-  const held = {};
+  const held = {}, stick = { x: 0, y: 0, rx: 0 };
   for (const [k, list] of Object.entries(KEYS)) held[k] = list.some((c) => keys.has(c)) || !!touchHeld[k];
+  const digital = { ...held };
   const gp = navigator.getGamepads ? [...navigator.getGamepads()].filter(Boolean)[0] : null;
   if (gp) {
-    const b = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed), ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
-    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), items: b(3), pause: b(9), map: b(8) };
+    const b = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed), ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = (v) => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
+    stick.x = dz(ax); stick.y = dz(ay); stick.rx = dz(gp.axes[2] || 0);
+    digital.left = digital.left || b(14); digital.right = digital.right || b(15); digital.up = digital.up || b(12); digital.down = digital.down || b(13);
+    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), items: b(3), pound: b(3) || b(6), pause: b(9), map: b(8) };
     if (Object.values(pad).some(Boolean) && !PAD.used) { PAD.used = true; staticText(); }
     for (const k in pad) held[k] = held[k] || pad[k];
   }
   const edge = {}; for (const k in held) edge[k] = (held[k] && !prevHeld[k]) || tapped.has(k);
   for (const k of tapped) edge[k] = true;
   tapped.clear(); prevHeld = held;
-  return { held, edge };
+  return { held, edge, digital, stick };
 }
 
 // ---------------------------------------------------------------- panels (mouse, keyboard or controller)
@@ -153,7 +169,7 @@ const ITEM_POWER = { mush: 1, flower: 2, leaf: 3 };
 function toMap() {
   if (S.LV) { S.LV.dispose(); S.LV = null; } for (const m of ents.values()) scene.remove(m); ents.clear(); for (const a of anims) scene.remove(a.m); anims.length = 0;
   if (heroMesh) heroMesh.visible = false; S.G = null;
-  mapGroup.visible = true; scene.background = skyTex('#5ab4ff', '#c8ecff'); refreshMap();
+  mapGroup.visible = true; scene.background = skyTex('#5ab4ff', '#c8ecff'); scene.fog = null; blob.visible = false; refreshMap();
   S.mode = 'map'; sound.setSong('map'); $('hud').hidden = false; $('mapui').hidden = false; mapText(); hud(); store();
 }
 function mapText() {
@@ -226,8 +242,9 @@ function startLevel(id, fromCheck) {
   if (S.LV) { S.LV.dispose(); } for (const m of ents.values()) scene.remove(m); ents.clear(); for (const a of anims) scene.remove(a.m); anims.length = 0;
   const def = LEVELS[id];
   S.G = newRun(def, { power: SAVE.power, checkpoint: fromCheck }); S.LV = buildLevel(scene, S.G);
-  const th = S.LV.theme; scene.background = skyTex(th.sky[0], th.sky[1]);
-  if (!heroMesh) { heroMesh = makeHero(); scene.add(heroMesh); } heroMesh.visible = true; heroMesh.userData.power = -1;
+  const th = S.LV.theme; scene.background = skyTex(th.sky[0], th.sky[1]); scene.fog = new THREE.Fog(th.fog[0], th.fog[1], th.fog[2]);
+  if (!heroMesh) { heroMesh = makeHero(); shade(heroMesh); scene.add(heroMesh); scene.add(blob); } heroMesh.visible = true; heroMesh.userData.power = -1; blob.visible = true;
+  cam.yaw = def.camYaw; cam.pitch = 0.5; cam.dist = 11; S.camT = null;
   mapGroup.visible = false; S.mode = 'level'; S.endT = 0; S.deadT = 0; S.acc = 0; S.camX = null; $('mapui').hidden = true;
   sound.setSong(def.theme); hud();
   banner(`WORLD 1-${id.split('-')[1]}`, N(def.name) + (fromCheck ? ` · ${L('從中間點開始', 'from the checkpoint')}` : ''));
@@ -236,9 +253,11 @@ function onEvent(e) {
   const G = S.G;
   switch (e.t) {
     case 'tile': S.dirty = true; break;
-    case 'coin': SAVE.coins++; sound.play('coin'); if (e.pop) popCoin(e.x, e.y); if (SAVE.coins >= 100) { SAVE.coins -= 100; SAVE.lives++; sound.play('oneup'); toast('1UP!'); } break;
-    case 'bumpblock': bumpBlock(e.x, e.y, e.down); break;
-    case 'break': sound.play('break'); debris(e.x, e.y); break;
+    case 'coin': SAVE.coins++; sound.play('coin'); if (e.pop) popCoin(e.x, e.y, e.z); if (SAVE.coins >= 100) { SAVE.coins -= 100; SAVE.lives++; sound.play('oneup'); toast('1UP!'); } break;
+    case 'bumpblock': bumpBlock(e.x, e.y, e.z, e.down); break;
+    case 'break': sound.play('break'); debris(e.x, e.y, e.z); break;
+    case 'pound': sound.play('pound'); dust(e.x + 0.35, e.y, e.z + 0.35); S.shake = 0.25; break;
+    case 'spinup': sound.play('wag'); break;
     case 'power': sound.play(e.kind === 'leaf' ? 'leaf' : 'power'); break;
     case 'oneup': SAVE.lives++; sound.play('oneup'); toast('1UP!'); break;
     case 'die': sound.setSong(null); sound.play('die'); S.deadT = 0.001; break;
@@ -250,35 +269,41 @@ function onEvent(e) {
   }
   void G;
 }
-function popCoin(x, y) { const m = makeCoinPop(); m.position.set(x + 0.5, y + 1.2, 0.2); scene.add(m); anims.push({ m, t: 0, kind: 'coin', y0: y + 1.2 }); }
-function bumpBlock(x, y, down) { const k = look(S.G.L, x, y); if (!k) return; const m = tileBox(k); m.position.set(x + 0.5, y + 0.5, 0.02); m.scale.setScalar(1.02); scene.add(m); anims.push({ m, t: 0, kind: 'bump', y0: y + 0.5, dir: down ? -1 : 1 }); }
-function debris(x, y) { for (let i = 0; i < 4; i++) { const m = box(0.4, 0.4, 0.4, '#c8641e', x + 0.5, y + 0.5, 0.2); scene.add(m); anims.push({ m, t: 0, kind: 'bit', vx: (i % 2 ? 1 : -1) * 3, vy: i < 2 ? 12 : 8 }); } }
+function popCoin(x, y, z) { const m = makeCoinPop(); m.position.set(x + 0.5, y + 1.2, z + 0.5); scene.add(m); anims.push({ m, t: 0, kind: 'coin', y0: y + 1.2 }); }
+function bumpBlock(x, y, z, down) { const k = look(S.G.L, x, y, z); if (!k) return; const m = tileBox(k === 'grass' ? 'dirt' : k); m.position.set(x + 0.5, y + 0.5, z + 0.5); m.scale.setScalar(1.03); scene.add(m); anims.push({ m, t: 0, kind: 'bump', y0: y + 0.5, dir: down ? -1 : 1 }); }
+function debris(x, y, z) { for (let i = 0; i < 6; i++) { const m = box(0.35, 0.35, 0.35, '#c8641e', x + 0.5, y + 0.5, z + 0.5); scene.add(m); const a = i / 6 * Math.PI * 2; anims.push({ m, t: 0, kind: 'bit', vx: Math.cos(a) * 3, vz: Math.sin(a) * 3, vy: i % 2 ? 12 : 8 }); } }
+function dust(x, y, z) { for (let i = 0; i < 8; i++) { const m = box(0.25, 0.25, 0.25, '#f0e8d8', x, y + 0.2, z); scene.add(m); const a = i / 8 * Math.PI * 2; anims.push({ m, t: 0, kind: 'bit', vx: Math.cos(a) * 5, vz: Math.sin(a) * 5, vy: 3 }); } }
 function stepAnims(dt) {
   for (let i = anims.length - 1; i >= 0; i--) {
     const a = anims[i]; a.t += dt;
     if (a.kind === 'coin') { a.m.position.y = a.y0 + Math.sin(Math.min(1, a.t / 0.5) * Math.PI) * 2; a.m.rotation.y += dt * 20; if (a.t > 0.5) a.done = true; }
     else if (a.kind === 'bump') { a.m.position.y = a.y0 + Math.sin(Math.min(1, a.t / 0.18) * Math.PI) * 0.35 * a.dir; if (a.t > 0.18) a.done = true; }
-    else if (a.kind === 'bit') { a.vy -= 40 * dt; a.m.position.x += a.vx * dt; a.m.position.y += a.vy * dt; a.m.rotation.z += dt * 10; if (a.t > 1.2) a.done = true; }
+    else if (a.kind === 'bit') { a.vy -= 40 * dt; a.m.position.x += a.vx * dt; a.m.position.z += (a.vz || 0) * dt; a.m.position.y += a.vy * dt; a.m.rotation.z += dt * 10; if (a.t > 1.2) a.done = true; }
     if (a.done) { scene.remove(a.m); anims.splice(i, 1); }
   }
 }
 function syncEntities(dt) {
   const G = S.G, seen = new Set();
   const sync = (list, make, pose) => { for (const o of list) { seen.add(o); let m = ents.get(o); if (!m) { m = make(o); scene.add(m); ents.set(o, m); } pose(m, o); } };
-  sync(G.enemies, (e) => makeEnemy(e), (m, e) => poseEnemy(m, e, dt, S.t));
-  sync(G.items, (it) => makeItem(it.kind), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.rise > 0 ? -0.3 : 0.1); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
-  sync(G.fire, () => makeFireball(), (m, f) => { m.position.set(f.x + f.w / 2, f.y + f.h / 2, 0.1); });
-  sync(G.shots, () => makeShot(), (m, s) => { m.position.set(s.x + s.w / 2, s.y + s.h / 2, 0.1); });
+  sync(G.enemies, (e) => shade(makeEnemy(e)), (m, e) => poseEnemy(m, e, dt, S.t));
+  sync(G.items, (it) => shade(makeItem(it.kind)), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.z + it.d / 2); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
+  sync(G.fire, () => makeFireball(), (m, f) => { m.position.set(f.x + f.w / 2, f.y + f.h / 2, f.z + f.d / 2); });
+  sync(G.shots, () => makeShot(), (m, s) => { m.position.set(s.x + 0.3, s.y + 0.2, s.z + 0.3); m.rotation.y = Math.atan2(s.vx, s.vz) + Math.PI / 2; });
   for (const [o, m] of ents) if (!seen.has(o)) { scene.remove(m); ents.delete(o); }
 }
 const STEP = 1 / 120;
-function levelStep(dt, held, edge) {
+function levelStep(dt, held, edge, digital, stick) {
   const G = S.G;
   if (edge.pause) return menuPanel();
+  // turning the camera: Q / E, the right stick
+  cam.yaw += ((held.camL ? 1 : 0) - (held.camR ? 1 : 0)) * 1.8 * dt - stick.rx * 2.4 * dt;
+  let ix = (digital.right ? 1 : 0) - (digital.left ? 1 : 0) + stick.x, iz = (digital.up ? 1 : 0) - (digital.down ? 1 : 0) - stick.y;
+  const len = Math.hypot(ix, iz); if (len > 1) { ix /= len; iz /= len; }
+  const mx = -Math.sin(cam.yaw) * iz + Math.cos(cam.yaw) * ix, mz = -Math.cos(cam.yaw) * iz - Math.sin(cam.yaw) * ix;
   S.acc += dt; let first = true;
   while (S.acc >= STEP) {
     S.acc -= STEP;
-    const inp = { left: held.left, right: held.right, jump: held.jump || (held.up && !matchMedia('(pointer: coarse)').matches), jumpPressed: first && (edge.jump || (edge.up && !PAD.used && !matchMedia('(pointer: coarse)').matches)), run: held.run, runPressed: first && edge.run };
+    const inp = { mx, mz, jump: held.jump, jumpPressed: first && edge.jump, run: held.run, runPressed: first && edge.run, poundPressed: first && edge.pound };
     for (const e of step(G, inp, STEP)) onEvent(e);
     first = false;
   }
@@ -312,20 +337,25 @@ let last = performance.now();
 const lerp = (a, b, k) => a + (b - a) * k;
 function frame(now) {
   const dt = Math.min(0.05, Math.max(0, (now - last) / 1000)); last = now; S.t += dt;
-  const { held, edge } = readButtons();
+  const { held, edge, digital, stick } = readButtons();
   if (S.mode === 'title') { if (edge.jump || edge.confirm || edge.pause) play(); }
   else if (S.panel) panelInput(edge);
   else if (S.mode === 'map') mapStep(dt, edge);
-  else if (S.mode === 'level') levelStep(dt, held, edge);
+  else if (S.mode === 'level') levelStep(dt, held, edge, digital, stick);
   // the camera
   if (S.mode === 'level' && S.G) {
-    const G = S.G, h = G.hero, vh = 15, dist = vh / 2 / Math.tan(camera.fov * Math.PI / 360), vw = vh * camera.aspect;
-    const want = Math.max(vw / 2, Math.min(G.L.w - vw / 2, h.x + h.dir * 1.5));
-    S.camX = S.camX == null ? want : lerp(S.camX, want, Math.min(1, dt * 5));
-    // (the view starts a little below the ground so the status bar does not hide where you stand)
-    const lo = vh / 2 - 0.9, cx = G.L.w < vw ? G.L.w / 2 : S.camX, cy = Math.max(lo, Math.min(Math.max(lo, G.L.h - vh / 2 + 0.5), h.y + 1.5));
-    S.camY = S.camY == null ? cy : lerp(S.camY, cy, Math.min(1, dt * 4));
-    camera.position.set(cx, S.camY, dist); camera.lookAt(cx, S.camY, 0);
+    const G = S.G, h = G.hero, hx = h.x + h.w / 2, hz = h.z + h.d / 2;
+    // the camera follows from behind and above (it rises slowly with you, so jumps do not shake it)
+    const want = new THREE.Vector3(hx + 3 * Math.cos(cam.yaw), (h.onGround || h.y < (S.camT ? S.camT.y - 1.5 : 0) || h.flyT > 0 || h.dead ? h.y : (S.camT ? S.camT.y - 1.2 : h.y)) + 1.2, hz);
+    if (!S.camT) S.camT = want.clone(); else if (!h.dead) S.camT.lerp(want, Math.min(1, dt * 5));
+    const cp = Math.cos(cam.pitch), off = new THREE.Vector3(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).multiplyScalar(cam.dist * (camera.aspect < 1 ? 1.35 : 1));
+    camera.position.copy(S.camT).add(off);
+    if (G.def.ceil) camera.position.y = Math.min(camera.position.y, G.def.ceil - 0.7);
+    if (S.shake > 0) { S.shake -= dt; camera.position.y += Math.sin(S.t * 80) * S.shake * 0.6; }
+    camera.lookAt(S.camT);
+    sun.position.set(S.camT.x - 8, S.camT.y + 22, S.camT.z + 12); sun.target.position.copy(S.camT);
+    // a soft shadow right under you, so you can always tell where you will land
+    const fl = floorBelow(G.L, hx, h.y + 0.1, hz); blob.visible = !h.dead && fl > -50; blob.position.set(hx, fl + 0.03, hz); const hgt = Math.max(0, h.y - fl); blob.scale.setScalar(Math.max(0.4, 1 - hgt * 0.06));
     poseHero(heroMesh, h, dt, S.t); syncEntities(dt); stepAnims(dt); S.LV.update(S.t);
     hudT += dt; if (hudT > 0.08) { hudT = 0; hud(); }
   } else {
@@ -336,18 +366,18 @@ function frame(now) {
     const n = nodes[SAVE.node], tk = S.mode === 'map' && S.tok ? S.tok : [n.x, 0.08, n.y, 0];
     mapHero.position.set(tk[0], tk[1], tk[2]); mapHero.rotation.y = tk[3]; mapHero.userData.inner.scale.set(1, 1, 1);
   }
-  renderer.render(scene, camera);
+  if (!S.noRender) renderer.render(scene, camera);
   requestAnimationFrame(frame);
 }
 let hudT = 0;
 
 // ---------------------------------------------------------------- start
-const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿／十字鍵 移動 · A 跳（拿著葉子在空中連按可以飛）· B／X 跑步＋攻擊 · Start 選單', 'Controller: stick / D-pad move · A jump (with the leaf, tap in the air to fly) · B / X run and attack · Start menu')
-  : matchMedia('(pointer: coarse)').matches ? L('觸控：◀ ▶ 移動 · A 跳（拿著葉子在空中連按可以飛）· B 跑步＋攻擊', 'Touch: ◀ ▶ move · A jump (with the leaf, tap in the air to fly) · B run and attack')
-    : L('← → 移動 · 空白鍵／Z／↑ 跳（拿著葉子在空中連按可以飛）· Shift／X 跑步＋丟火球／甩尾巴 · Esc 選單', '← → move · Space / Z / ↑ jump (with the leaf, tap in the air to fly) · Shift / X run, throw fire, swing your tail · Esc menu');
+const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移動 · 右搖桿 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B／X 跑步＋攻擊 · Y／LT 在空中 屁股蹬地 · Start 選單', 'Controller: left stick move · right stick turns the camera · A jump (with the leaf, tap in the air to fly) · B / X run and attack · Y / LT in the air: ground pound · Start menu')
+  : matchMedia('(pointer: coarse)').matches ? L('觸控：方向鈕 移動 · 拖曳畫面 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B 跑步＋攻擊 · ⤓ 屁股蹬地', 'Touch: arrows move · drag the screen to turn the camera · A jump (with the leaf, tap in the air to fly) · B run and attack · ⤓ ground pound')
+    : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（拿著葉子在空中連按可以飛）· Shift／X 跑步＋丟火球／甩尾巴 · 在空中按 C 屁股蹬地 · Q／E 或拖曳 轉視角 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with the leaf, tap in the air to fly) · Shift / X run, throw fire, swing your tail · C in the air: ground pound · Q / E or drag: turn the camera · Esc menu');
 function staticText() {
   document.documentElement.lang = EN() ? 'en' : 'zh-Hant';
-  $('t-sub').textContent = L('跳上方塊、踩扁敵人、吃下神奇葉子在天上飛！穿過葉葉國的八個關卡，打倒龜王。（簡單模式）', 'Bop blocks, stomp baddies, and grab the Super Leaf to fly! Cross eight levels of Leafy Land and beat the Turtle King. (Easy mode)');
+  $('t-sub').textContent = L('在 3D 的葉葉國裡自由奔跑！頂方塊、踩扁敵人、屁股蹬地，吃下神奇葉子在天上飛，穿過八個關卡打倒龜王。（簡單模式）', 'Run free through a 3D Leafy Land! Bop blocks, stomp baddies, ground-pound, and grab the Super Leaf to fly through eight levels to the Turtle King. (Easy mode)');
   $('t-play').textContent = hadSave ? L('繼續冒險', 'Continue') : L('開始', 'Start');
   $('t-lang').textContent = EN() ? '中文' : 'English';
   $('t-help').textContent = helpText();
