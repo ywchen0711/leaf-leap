@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+  <title>葉葉跳跳 · Leaf Leap</title>
+  <meta name="description" content="跳上方塊、踩扁敵人、吃下神奇葉子在天上飛的橫向卷軸平台遊戲（簡單模式）。 A side-scrolling platformer: bop blocks, stomp baddies, and fly with the Super Leaf (easy mode).">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lilita+One&family=Press+Start+2P&family=Noto+Sans+TC:wght@500;700;900&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css?v=1">
+  <script type="importmap">
+    { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+  </script>
+</head>
+<body>
+  <canvas id="view"></canvas>
+
+  <div id="curtain"></div>
+  <div id="title">
+    <div class="logo"><span class="zh">葉葉跳跳</span><span class="en">LEAF LEAP</span></div>
+    <p id="t-sub"></p>
+    <div class="row"><button id="t-play" class="go big"></button><button id="t-lang"></button></div>
+    <p id="t-help" class="help"></p>
+  </div>
+
+  <div id="hud" hidden>
+    <div id="bar">
+      <div class="cell"><span id="where">WORLD 1</span><span id="pm"></span></div>
+      <div class="cell"><span class="hero">PIP ×<b id="lives">5</b></span><span class="coin">◎<b id="coins">00</b></span></div>
+      <div id="cards"></div>
+    </div>
+    <div id="mapui" hidden><div id="nodename"></div><div id="items"></div><div id="maphelp"></div></div>
+    <div id="pad">
+      <div class="dpad"><button id="t-up">▲</button><button id="t-left">◀</button><button id="t-right">▶</button><button id="t-down">▼</button></div>
+      <div class="ab"><button id="t-b">B</button><button id="t-a">A</button></div>
+      <button id="t-pause">❚❚</button>
+    </div>
+  </div>
+  <div id="banner"></div>
+  <div id="toast"></div>
+  <div id="panel" hidden></div>
+
+  <script type="module" src="js/main.js?v=1"></script>
+  <script src="/hub.js" data-pos="top-left" defer></script>
+</body>
+</html>
