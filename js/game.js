@@ -9,9 +9,9 @@ export const isQ = (t) => t === T.QCOIN || t === T.QLEAF || t === T.Q1UP || t ==
 export const POWER = { SMALL: 0, BIG: 1, FIRE: 2, LEAF: 3, TANOOKI: 4, FROG: 5 };
 const hasTail = (h) => h.power === POWER.LEAF || h.power === POWER.TANOOKI;
 // tuning, in blocks and seconds
-export const PH = { walk: 6, run: 9.5, prun: 12, accel: 32, airAccel: 18, fric: 34, airFric: 6, jump: 16, jumpRun: 0.2, gHold: 34, g: 75, fall: 22,
+export const PH = { walk: 6, run: 9.5, prun: 12, accel: 32, airAccel: 18, fric: 34, airFric: 6, jump: 16, jumpRun: 0.2, gHold: 34, g: 58, fall: 22,
   stomp: 10, stompHold: 15, fly: 9, flyTime: 4.5, wagFall: 2.4, note: 13, noteHold: 19, pound: 28,
-  swim: 3.6, frogSwim: 7.5, frogWalk: 3.8, stroke: 5.5, sink: 3, waterG: 10, statueTime: 4 };
+  swim: 3.6, frogSwim: 7.5, frogWalk: 6, stroke: 5.5, sink: 3, waterG: 10, statueTime: 4 };
 
 // the grid: index ((y * d) + z) * w + x; outside the sides is an invisible wall, below is a pit, above is open sky
 export const tileAt = (L, x, y, z) => (x < 0 || x >= L.w || z < 0 || z >= L.d ? T.HARD : y < 0 || y >= L.h ? T.EMPTY : L.tiles[(y * L.d + z) * L.w + x]);
@@ -243,8 +243,6 @@ function stepHero(G, inp, dt) {
   }
   // nobody flies off the top of the world
   if (h.y > L.h + 3 && h.vy > 0) h.vy = 0;
-  // the frog hops along on land
-  if (h.power === POWER.FROG && h.onGround && !h.swimming && want > 0.1 && h.vy <= 0) { h.vy = 6; h.onGround = false; G.ev.push({ t: 'hop' }); }
   h.prevY = h.y;
   if (sweep(L, h, 'x', h.vx * dt)) h.vx = 0;
   if (sweep(L, h, 'z', h.vz * dt)) h.vz = 0;

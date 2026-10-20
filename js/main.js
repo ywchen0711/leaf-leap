@@ -296,7 +296,7 @@ function startLevel(id, fromCheck) {
   S.G = newRun(def, { power: SAVE.power, checkpoint: fromCheck, pwing }); S.LV = buildLevel(scene, S.G);
   const th = S.LV.theme; scene.background = skyTex(th.sky[0], th.sky[1]); scene.fog = new THREE.Fog(th.fog[0], th.fog[1], th.fog[2]);
   if (!heroMesh) { heroMesh = makeHero(); shade(heroMesh); scene.add(heroMesh); scene.add(blob); } heroMesh.visible = true; heroMesh.userData.power = -1; blob.visible = true;
-  cam.yaw = def.camYaw; cam.pitch = 0.5; cam.dist = 11; S.camT = null;
+  cam.yaw = def.camYaw; cam.pitch = 0.5; cam.dist = 11; S.camT = null; S.camBase = null;
   mapGroup.visible = false; S.mode = 'level'; S.endT = 0; S.deadT = 0; S.acc = 0; S.camX = null; $('mapui').hidden = true;
   sound.setSong(def.theme); hud();
   banner(`WORLD 1-${id.split('-')[1]}`, N(def.name) + (fromCheck ? ` · ${L('從中間點開始', 'from the checkpoint')}` : ''));
@@ -398,8 +398,11 @@ function frame(now) {
   if (S.mode === 'level' && S.G) {
     const G = S.G, h = G.hero, hx = h.x + h.w / 2, hz = h.z + h.d / 2;
     // the camera follows from behind and above (it rises slowly with you, so jumps do not shake it)
-    const want = new THREE.Vector3(hx + 3 * Math.cos(cam.yaw), (h.onGround || h.y < (S.camT ? S.camT.y - 1.5 : 0) || h.flyT > 0 || h.dead ? h.y : (S.camT ? S.camT.y - 1.2 : h.y)) + 1.2, hz);
-    if (!S.camT) S.camT = want.clone(); else if (!h.dead) S.camT.lerp(want, Math.min(1, dt * 5));
+    // (it stays level through ordinary jumps, but goes up with you when you fly or climb more than two blocks above where you stood)
+    if (h.onGround || h.swimming || S.camBase == null) S.camBase = h.y;
+    const ty = h.flyT > 0 || h.dead || Math.abs(h.y - S.camBase) > 2 ? h.y : S.camBase;
+    const want = new THREE.Vector3(hx + 3 * Math.cos(cam.yaw), ty + 1.2, hz);
+    if (!S.camT) S.camT = want.clone(); else if (!h.dead) { const k = Math.min(1, dt * 5); S.camT.x += (want.x - S.camT.x) * k; S.camT.z += (want.z - S.camT.z) * k; S.camT.y += (want.y - S.camT.y) * Math.min(1, dt * (h.flyT > 0 ? 8 : 4)); }
     const cp = Math.cos(cam.pitch), off = new THREE.Vector3(Math.sin(cam.yaw) * cp, Math.sin(cam.pitch), Math.cos(cam.yaw) * cp).multiplyScalar(cam.dist * (camera.aspect < 1 ? 1.35 : 1));
     camera.position.copy(S.camT).add(off);
     if (G.def.ceil) camera.position.y = Math.min(camera.position.y, G.def.ceil - 0.7);

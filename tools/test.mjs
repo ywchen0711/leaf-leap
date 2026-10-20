@@ -9,7 +9,7 @@ const NONE = { mx: 0, mz: 0, jump: false, jumpPressed: false, run: false, runPre
 
 // a runner that heads for the level's waypoints with run held, and jumps at walls, pits, lava and enemies
 // (it cannot be hurt, but falling in a pit or lava still counts as a failure)
-function runBot(def, power) {
+function runBot(def, power, walk = false) {
   const G = newRun(def, { power, god: true }), h = G.hero, L = G.L, s = { hold: 0, bestX: 0, stuck: 0 };
   for (let i = 0; i < 240 / DT; i++) {
     const cx = h.x + h.w / 2, cz = h.z + h.d / 2;
@@ -17,14 +17,14 @@ function runBot(def, power) {
     let dx = target[0] - cx, dz = target[1] - cz; const l = Math.hypot(dx, dz) || 1; dx /= l; dz /= l;
     const wall = [0.3, 1.0, 1.6].some((dy) => dy < h.h + 0.3 && isSolid(tileAt(L, Math.floor(cx + dx * 1.3), Math.floor(h.y + dy), Math.floor(cz + dz * 1.3))));
     const floorAt = (k) => floorBelow(L, cx + dx * k, h.y + 0.1, cz + dz * k) >= h.y - 2.5;
-    const gap = !floorAt(0.7) || !floorAt(1.5);
+    const gap = !floorAt(0.6);
     const foe = G.enemies.some((e) => e.alive && e.active && Math.hypot(e.x + e.w / 2 - cx, e.z + e.d / 2 - cz) < 2.8 && (e.x - h.x) * dx + (e.z - h.z) * dz > 0 && Math.abs(e.y - h.y) < 2.5 && !(e.kind === 'koopa' && e.state === 'shell'));
     let press = false;
     if (h.onGround && s.hold <= 0 && (wall || gap || foe)) { press = true; s.hold = 0.5; }
     // in the water: stroke whenever it sinks below cruising depth or meets a wall
     if (h.swimming && s.hold <= 0 && (h.y < 9.5 || wall) && h.vy < 1) { press = true; s.hold = 0.3; }
     s.hold -= DT;
-    step(G, { ...NONE, mx: dx, mz: dz, run: true, jump: s.hold > 0, jumpPressed: press }, DT);
+    step(G, { ...NONE, mx: dx, mz: dz, run: !walk, jump: s.hold > 0, jumpPressed: press }, DT);
     if (h.dead || G.lava) return { G, why: G.lava ? 'lava' : G.fell ? 'fell' : 'died', x: h.x, z: h.z };
     if (G.cleared) return { G, done: true, t: i * DT };
     if (def.arena && h.x >= def.arena) return { G, done: true, arena: true, t: i * DT };
@@ -38,12 +38,26 @@ ok('every level on the map exists', MAP.nodes.filter((n) => n.kind !== 'start' &
 for (const def of Object.values(LEVELS)) {
   const [sx, sy, sz] = def.start;
   ok(`${def.id} has a goal or a boss, and room to start`, (!!def.goal || def.ents.some((e) => 'BKJ'.includes(e.t))) && !isSolid(tileAt(def, sx, sy, sz)) && isSolid(tileAt(def, sx, sy - 1, sz)));
-  for (const power of [0, 1]) {
-    const r = runBot(def, power);
-    ok(`${def.id} can be finished (${power ? 'big' : 'small'})`, r.done, r.done ? `${r.t.toFixed(0)} s${r.arena ? ', reached the boss' : ''}` : `${r.why} at x ${r.x.toFixed(1)} z ${r.z.toFixed(1)}`);
+  // small and big while running; walking only (no run button); and in the frog suit, which cannot run and hops
+  for (const [power, walk, label] of [[0, false, 'small'], [1, false, 'big'], [0, true, 'small, walking'], [5, true, 'frog']]) {
+    const r = runBot(def, power, walk);
+    ok(`${def.id} can be finished (${label})`, r.done, r.done ? `${r.t.toFixed(0)} s${r.arena ? ', reached the boss' : ''}` : `${r.why} at x ${r.x.toFixed(1)} z ${r.z.toFixed(1)}`);
   }
 }
 
+// ---- every ? block can be bumped: the floor under it (or just beside it) is no more than a jump below
+{
+  const far = [];
+  for (const def of Object.values(LEVELS)) {
+    const Q = [T.QCOIN, T.QLEAF, T.QFLOWER, T.Q1UP, T.QTANOOKI, T.QFROG];
+    for (let y = 0; y < def.h; y++) for (let z = 0; z < def.d; z++) for (let x = 0; x < def.w; x++) {
+      if (!Q.includes(def.tiles[(y * def.d + z) * def.w + x]) || def.theme === 'water' && y < 12) continue;
+      let best = -99; for (const [ox, oz] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]]) best = Math.max(best, floorBelow(def, x + ox + 0.5, y - 0.5, z + oz + 0.5));
+      if (y - best > 4.2) far.push(`${def.id} (${x},${y},${z}) ${(y - best).toFixed(0)} up`);
+    }
+  }
+  ok('every ? block can be reached with a jump', !far.length, far.join(' · '));
+}
 // ---- the rules
 const flat = (w = 40, d = 10, extra) => { const tiles = new Uint8Array(w * 15 * d); for (let z = 0; z < d; z++) for (let x = 0; x < w; x++) { tiles[(0 * d + z) * w + x] = T.GROUND; tiles[(1 * d + z) * w + x] = T.GROUND; } const def = { id: 't', w, h: 15, d, tiles, ents: [], start: [2, 2, 4], goal: null, check: null, theme: 'grass', path: [] }; if (extra) extra(def); return def; };
 const put = (def, x, y, z, t) => { def.tiles[(y * def.d + z) * def.w + x] = t; };
@@ -112,7 +126,7 @@ const run = (G, secs, inp = NONE, every) => { const evs = []; for (let i = 0; i 
   const F = newRun(sea, { power: 5 }); F.hero.y = 4; run(F, 1, { ...NONE, jump: true }); const up = F.hero.y;
   ok('the frog swims up while jump is held, and does not sink', up > 7, `y ${up.toFixed(1)}`);
   const S = newRun(sea); S.hero.y = 9; run(S, 1.5); ok('without a suit you sink slowly in water', S.hero.y < 8 && S.hero.y > 2, `y ${S.hero.y.toFixed(1)}`);
-  const L1 = newRun(flat(60)); setPower(L1.hero, 5); const ev = run(L1, 1, { ...NONE, mx: 1 }); ok('on land the frog hops along slowly', L1.hero.x - 2 < 5 && ev.some((e) => e.t === 'hop'), `${(L1.hero.x - 2).toFixed(1)} blocks in 1 s`);
+  const L1 = newRun(flat(60)); setPower(L1.hero, 5); run(L1, 1, { ...NONE, mx: 1, run: true }); ok('on land the frog cannot run', L1.hero.vx < 6.5, `${(L1.hero.x - 2).toFixed(1)} blocks in 1 s`);
 }
 {
   const def = flat(); def.ents = [{ t: 'g', x: 6, y: 2, z: 4 }];

@@ -58,12 +58,12 @@ export const LEVELS = {
   '1-2': level('1-2', ['起伏山丘', 'Rolling Hills'], 'grass', 140, 12, 16, (b) => {
     const m = b.mid;
     b.ground(0, 139); b.ground(30, 50, 0, 11, 4); b.ground(36, 44, 0, 4, 6); b.coins(37, 7, 2, 7);
-    b.e('g', 14, m); b.e('k', 22, m); b.row(18, 6, m, 'B?B'); b.row(26, 7, m, 'L');
+    b.e('g', 14, m); b.e('k', 22, m); b.row(18, 6, m, 'B?B'); b.row(26, 6, m, 'L');
     b.e('k', 40, 8, 4); b.e('g', 46, m, 4); b.hole(55, 57);
     b.fill(62, 1, 2, 66, 1, 8, T.NOTE); b.coins(62, 9, m, 5); b.e('k', 70, m);
     b.check(78);
     b.e('w', 84, 4); b.e('w', 88, 8); b.row(92, 6, m, 'B?B?B'); b.pipe(98, m - 1, 3, true);
-    b.ground(104, 118, 0, 11, 4); b.e('k', 110, 4, 4); b.row(110, 8, m, '?F?'); b.hole(120, 121);
+    b.ground(104, 114, 0, 11, 4); b.e('k', 109, 4, 4); b.row(108, 8, m, '?F?'); b.hole(120, 121);
     b.e('g', 126, m); b.e('g', 128, 3);
     b.stairs(130, 0, 11, 3); b.goal(135);
   }),
