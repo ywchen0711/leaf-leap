@@ -6,8 +6,8 @@
 // with a lighthouse and a shipwreck. Hidden all over it are secret stars: on the tallest treetop and the highest peak,
 // inside invisible blocks, under an X you must ground-pound, behind cracked brick walls, at the end of sets of eight
 // red coins, down unmarked pipes, under the sea. Old stone tablets whisper riddles about where to look.
-import { T } from './game.js?v=5';
-import { LEVELS } from './levels.js?v=5';
+import { T } from './game.js?v=6';
+import { LEVELS } from './levels.js?v=6';
 
 export const W = 576, D = 576, H = 80, GY = 17, SEA = 16;   // you stand at y = GY on flat land; water fills up to y = SEA
 export const OX = 40, OZ = 150;                              // where the old heartland sits in the big world

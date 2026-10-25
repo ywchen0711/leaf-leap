@@ -2,11 +2,11 @@
 // Leafy Land is a single island now: walk anywhere, climb the cloud stairs, take a warp pipe home to Mushroom Village,
 // and cross each course's finish line for its card. There is no world map any more; the map screen shows the island.
 import * as THREE from 'three';
-import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=5';
-import { LEVELS } from './levels.js?v=5';
-import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY } from './world.js?v=5';
-import { buildWorldView, worldMapImage, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=5';
-import { Sound } from './audio.js?v=5';
+import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=6';
+import { LEVELS } from './levels.js?v=6';
+import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY } from './world.js?v=6';
+import { buildWorldView, worldMapImage, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=6';
+import { Sound } from './audio.js?v=6';
 
 const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------- language
