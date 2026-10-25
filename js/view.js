@@ -1,6 +1,6 @@
 // LEAF LEAP 3D — what you see: pixel-art blocks, round pipes, scenery for each theme, the hero, enemies, items and effects.
 import * as THREE from 'three';
-import { T, cardAt, tileAt, isSolid } from './game.js?v=6';
+import { T, cardAt, tileAt, isSolid } from './game.js?v=7';
 
 // ---------------------------------------------------------------- pixel textures (16 × 16, drawn sharp)
 const cache = new Map();
@@ -184,7 +184,7 @@ export function cardDataURL(k) { const t = cardTex(k); return t.image.toDataURL(
 // ---------------------------------------------------------------- characters
 // ---------------------------------------------------------------- characters, drawn like a comic: big heads, huge round eyes,
 // spiky hair, bright flat colours with cel shading (two hard steps of shadow) and a thick black ink line round every part
-const GRAD = (() => { const t = new THREE.DataTexture(new Uint8Array([110, 190, 255]), 3, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
+const GRAD = (() => { const t = new THREE.DataTexture(new Uint8Array([150, 215, 255]), 3, 1, THREE.RedFormat); t.minFilter = THREE.NearestFilter; t.magFilter = THREE.NearestFilter; t.generateMipmaps = false; t.needsUpdate = true; return t; })();
 const toonMats = new Map();
 export function tmat(c, emissive) { const k = c + (emissive || ''); if (!toonMats.has(k)) toonMats.set(k, new THREE.MeshToonMaterial({ color: c, gradientMap: GRAD, emissive: emissive || '#000000' })); return toonMats.get(k); }
 const INKMAT = new THREE.MeshBasicMaterial({ color: '#141014', side: THREE.BackSide });
@@ -222,74 +222,100 @@ const brow = (x, y, z, rot, s = 1, c = '#141014') => { const b = pill(0.035 * s,
 // a wide open grin: dark mouth, a red tongue, a row of white teeth
 function grin(y, z, w = 1) { const g = new THREE.Group(); g.add(flat(ball(0.1 * w, '#3a0a10', 0, 0, 0, 1.3, 0.75, 0.4)), flat(ball(0.06 * w, '#e8505a', 0, -0.035 * w, 0.02, 1.2, 0.5, 0.4)), flat(tbox(0.18 * w, 0.03 * w, 0.03, '#ffffff', 0, 0.045 * w, 0.03))); g.position.set(0, y, z); return g; }
 
-export function makeHero() {
-  const g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
+// the two brothers. Josh, the older one: spiky dark hair under a yellow headband, a red jacket, blue trousers.
+// Jasper, the younger one: a little smaller, a mop of soft brown hair with a curl on top under a backwards blue cap,
+// a green jacket and orange shorts. Both cute and round: big heads, big sparkly eyes, rosy cheeks, round mitts.
+export const BROS = {
+  josh: { name: 'Josh', size: 1, hair: '#3a2014', band: '#ffd030', shirt: '#ff5a4a', alls: '#3a6ae0', fire: '#ff5a4a', eye: '#3a2a1a', skin: '#ffdcbc' },
+  jasper: { name: 'Jasper', size: 0.9, hair: '#b0702a', band: '#3a8aff', shirt: '#4ac85a', alls: '#ffa830', fire: '#4ac85a', eye: '#2a5ad8', skin: '#ffe2c4' },
+};
+const suit = (B, p) => (p === 2 ? { cap: B.band, shirt: '#ffffff', alls: B.fire } : p === 4 ? { cap: B.band, shirt: '#b0703a', alls: '#7a4418', skin: '#f8d4a8' } : p === 5 ? { cap: B.band, shirt: '#4ad84a', alls: '#2aa83a', skin: '#ffe4c0' } : { cap: B.band, shirt: B.shirt, alls: B.alls });
+// a cute eye: a big rounded white, a large coloured iris, a dark pupil, two glints
+function cuteEye(x, y, z, s = 1, iris = '#3a2a1a') {
+  const g = new THREE.Group(); g.add(ball(0.105 * s, '#ffffff', 0, 0, 0, 0.82, 1.08, 0.45), flat(ball(0.07 * s, iris, 0, -0.012 * s, 0.03 * s, 0.85, 1.05, 0.42)), flat(ball(0.04 * s, '#141014', 0, -0.012 * s, 0.045 * s, 0.85, 1.05, 0.4)),
+    flat(ball(0.026 * s, '#ffffff', 0.026 * s, 0.03 * s, 0.07 * s)), flat(ball(0.012 * s, '#ffffff', -0.022 * s, -0.035 * s, 0.07 * s)));
+  g.position.set(x, y, z); return g;
+}
+const smile = (y, z, w = 1) => { const g = new THREE.Group(); g.add(flat(ball(0.07 * w, '#5a1a20', 0, 0, 0, 1.2, 0.6, 0.35)), flat(ball(0.045 * w, '#ff7a8a', 0, -0.02 * w, 0.02, 1.1, 0.5, 0.35))); g.position.set(0, y, z); return g; };
+export function makeHero(kind = 'josh') {
+  const B = BROS[kind] || BROS.josh, g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
   const parts = {};
   const legL = new THREE.Group(), legR = new THREE.Group(), armL = new THREE.Group(), armR = new THREE.Group();
-  legL.position.set(-0.15, 0.48, 0); legR.position.set(0.15, 0.48, 0); armL.position.set(-0.33, 1.0, 0); armR.position.set(0.33, 1.0, 0);
-  // short legs in baggy trousers, chunky boots with a white stripe
-  parts.legLm = pill(0.13, 0.3, '#2a4ab8', 0, -0.16, 0); parts.legRm = pill(0.13, 0.3, '#2a4ab8', 0, -0.16, 0);
-  parts.shoeL = ball(0.17, '#7a3a14', 0, -0.4, 0.05, 1, 0.7, 1.4); parts.shoeR = ball(0.17, '#7a3a14', 0, -0.4, 0.05, 1, 0.7, 1.4);
-  legL.add(parts.legLm, parts.shoeL, flat(tbox(0.27, 0.05, 0.3, '#ffffff', 0, -0.32, 0.04))); legR.add(parts.legRm, parts.shoeR, flat(tbox(0.27, 0.05, 0.3, '#ffffff', 0, -0.32, 0.04)));
-  // arms: sleeves, big round gloves and a wristband in the headband's colour
-  parts.armLm = pill(0.1, 0.3, '#e83a3a', 0, -0.14, 0); parts.armRm = pill(0.1, 0.3, '#e83a3a', 0, -0.14, 0);
-  parts.bandL = disc(0.11, 0.07, '#ffd030', 0, -0.3, 0); parts.bandR = disc(0.11, 0.07, '#ffd030', 0, -0.3, 0);
-  for (const [a, m, b] of [[armL, parts.armLm, parts.bandL], [armR, parts.armRm, parts.bandR]]) a.add(m, b, ball(0.13, '#ffffff', 0, -0.42, 0.01), ball(0.055, '#ffffff', 0, -0.39, 0.11));
-  // a short body: jacket over trousers, a belt
-  parts.shirt = ball(0.28, '#e83a3a', 0, 0.98, 0, 1.1, 0.72, 0.85); parts.body = ball(0.29, '#2a4ab8', 0, 0.7, 0, 1.08, 0.7, 0.88);
-  parts.strapL = disc(0.315, 0.07, '#3a2410', 0, 0.82, 0); parts.strapL.scale.z = 0.27; parts.strapR = flat(tbox(0.1, 0.09, 0.05, '#ffd030', 0, 0.82, 0.25));
-  // the head: big and round, with huge eyes, thick brows, a grin, and a crown of spiky hair under a headband
-  const head = new THREE.Group(); head.position.y = 1.42;
-  parts.face = ball(0.37, '#ffd8b0', 0, 0, 0, 1, 0.95, 0.95);
-  const eyes = new THREE.Group(); eyes.add(eye(-0.13, 0.04, 0.3, 1.25), eye(0.13, 0.04, 0.3, 1.25));
-  const brows = new THREE.Group(); brows.add(brow(-0.13, 0.2, 0.32, -0.2), brow(0.13, 0.2, 0.32, 0.2));
-  const nose = flat(ball(0.035, '#f0a880', 0, -0.06, 0.35)), mouth = grin(-0.16, 0.31, 0.9), cheeks = new THREE.Group(); cheeks.add(flat(ball(0.05, '#ff9a9a', -0.22, -0.1, 0.27, 1, 0.6, 0.3)), flat(ball(0.05, '#ff9a9a', 0.22, -0.1, 0.27, 1, 0.6, 0.3)));
-  const earsH = new THREE.Group(); earsH.add(ball(0.075, '#ffcaa0', -0.36, -0.02, 0, 0.6, 1, 0.8), ball(0.075, '#ffcaa0', 0.36, -0.02, 0, 0.6, 1, 0.8));
-  const hair = new THREE.Group(), HC = '#2a1a1a';
-  hair.add(ball(0.38, HC, 0, 0.1, -0.07, 1.05, 0.88, 1.04), ball(0.34, HC, 0, -0.06, -0.14, 1.04, 0.9, 0.85));
-  for (const [x, y] of [[-0.22, -0.18], [0, -0.22], [0.22, -0.18]]) { const tuft = cone(0.11, 0.24, HC, x, y, -0.36); tuft.rotation.x = -2.3; hair.add(tuft); }
-  for (const [a, b, len, r] of [[0, 0.35, 0.5, 0.15], [0.7, 0.75, 0.46, 0.15], [-0.7, 0.75, 0.46, 0.15], [1.5, 0.9, 0.48, 0.15], [-1.5, 0.9, 0.48, 0.15], [2.3, 0.85, 0.46, 0.15], [-2.3, 0.85, 0.46, 0.15], [3.14, 0.75, 0.5, 0.16], [2.75, 0.4, 0.44, 0.14], [-2.75, 0.4, 0.44, 0.14], [1.9, 0.45, 0.42, 0.13], [-1.9, 0.45, 0.42, 0.13]]) {
-    const sp = cone(r, len * 1.1, HC); const dir = new THREE.Vector3(Math.sin(a) * Math.sin(b), Math.cos(b), Math.cos(a) * Math.sin(b) * 0.9 - 0.15).normalize();
-    sp.position.copy(dir.clone().multiplyScalar(0.36)).add(new THREE.Vector3(0, 0.1, -0.04)); sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); hair.add(sp);
+  legL.position.set(-0.13, 0.42, 0); legR.position.set(0.13, 0.42, 0); armL.position.set(-0.3, 0.9, 0); armR.position.set(0.3, 0.9, 0);
+  // stubby legs and round little shoes
+  parts.legLm = pill(0.12, 0.24, B.alls, 0, -0.13, 0); parts.legRm = pill(0.12, 0.24, B.alls, 0, -0.13, 0);
+  parts.shoeL = ball(0.16, '#8a4a1e', 0, -0.33, 0.05, 1, 0.75, 1.3); parts.shoeR = ball(0.16, '#8a4a1e', 0, -0.33, 0.05, 1, 0.75, 1.3);
+  legL.add(parts.legLm, parts.shoeL, flat(ball(0.05, '#ffffff', 0, -0.27, 0.18))); legR.add(parts.legRm, parts.shoeR, flat(ball(0.05, '#ffffff', 0, -0.27, 0.18)));
+  // short arms, big round mitts, a wristband
+  parts.armLm = pill(0.1, 0.22, B.shirt, 0, -0.1, 0); parts.armRm = pill(0.1, 0.22, B.shirt, 0, -0.1, 0);
+  parts.bandL = disc(0.105, 0.06, B.band, 0, -0.23, 0); parts.bandR = disc(0.105, 0.06, B.band, 0, -0.23, 0);
+  for (const [a, m, b] of [[armL, parts.armLm, parts.bandL], [armR, parts.armRm, parts.bandR]]) a.add(m, b, ball(0.14, '#ffffff', 0, -0.34, 0.01), ball(0.06, '#ffffff', 0, -0.3, 0.12));
+  // a round little body
+  parts.shirt = ball(0.27, B.shirt, 0, 0.86, 0, 1.08, 0.78, 0.9); parts.body = ball(0.27, B.alls, 0, 0.6, 0, 1.05, 0.68, 0.9);
+  parts.strapL = disc(0.29, 0.06, '#5a3418', 0, 0.71, 0); parts.strapL.scale.z = 0.25; parts.strapR = flat(ball(0.045, '#ffd030', 0, 0.71, 0.24));
+  // the head: very big and round, low sparkly eyes, rosy cheeks, a small smile
+  const head = new THREE.Group(); head.position.y = 1.3;
+  parts.face = ball(0.44, B.skin, 0, 0, 0, 1, 0.94, 0.96);
+  const eyes = new THREE.Group(); eyes.add(cuteEye(-0.15, -0.02, 0.36, 1.4, B.eye), cuteEye(0.15, -0.02, 0.36, 1.4, B.eye));
+  const brows = new THREE.Group(); brows.add(brow(-0.15, 0.16, 0.39, 0.12, 0.75, B.hair === '#b0702a' ? '#7a4a1a' : '#2a1410'), brow(0.15, 0.16, 0.39, -0.12, 0.75, B.hair === '#b0702a' ? '#7a4a1a' : '#2a1410'));
+  const mouth = smile(-0.19, 0.38, 1), cheeks = new THREE.Group(); cheeks.add(flat(ball(0.075, '#ff8a9a', -0.27, -0.14, 0.31, 1, 0.6, 0.3)), flat(ball(0.075, '#ff8a9a', 0.27, -0.14, 0.31, 1, 0.6, 0.3)));
+  const nose = flat(ball(0.03, '#f8a88a', 0, -0.09, 0.42));
+  const earsH = new THREE.Group(); earsH.add(ball(0.08, B.skin, -0.43, -0.04, 0, 0.6, 1, 0.8), ball(0.08, B.skin, 0.43, -0.04, 0, 0.6, 1, 0.8));
+  const hair = new THREE.Group(), HC = B.hair;
+  if (kind === 'jasper') {
+    // a soft round mop with a curl on top, under a backwards cap
+    hair.add(ball(0.45, HC, 0, 0.09, -0.06, 1.04, 0.9, 1.04));
+    for (const [x, z] of [[-0.3, 0.26], [-0.12, 0.36], [0.08, 0.37], [0.27, 0.27]]) hair.add(ball(0.12, HC, x, 0.17, z, 1, 0.75, 0.8));
+    for (const [x, y, z] of [[-0.38, -0.08, -0.05], [0.38, -0.08, -0.05], [0, -0.06, -0.38]]) hair.add(ball(0.15, HC, x, y, z, 0.7, 1, 0.8));
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 8, 16, Math.PI * 1.5), tmat(HC)); curl.position.set(0.02, 0.56, 0.02); curl.rotation.set(0, 0, 0.8); hair.add(curl);
+    parts.cap = dome(0.5, B.band, 0, 0.15, -0.05, 1.03, 0.8, 1.03); parts.brim = new THREE.Group(); const br = disc(0.28, 0.05, B.band, 0, 0.16, -0.46); br.scale.z = 0.18; parts.brim.add(br); parts.brim.add(ball(0.06, '#ffffff', 0, 0.56, -0.05));
+  } else {
+    // a crown of soft spikes, a fringe, a headband with flying tails
+    hair.add(ball(0.45, HC, 0, 0.1, -0.07, 1.04, 0.9, 1.03), ball(0.4, HC, 0, -0.06, -0.15, 1.04, 0.9, 0.85));
+    for (const [a, b, len] of [[0, 0.3, 0.42], [0.75, 0.75, 0.38], [-0.75, 0.75, 0.38], [1.55, 0.95, 0.36], [-1.55, 0.95, 0.36], [2.35, 0.85, 0.36], [-2.35, 0.85, 0.36], [3.14, 0.75, 0.4]]) {
+      const sp = ball(0.13, HC, 0, 0, 0, 0.75, len / 0.13 / 2, 0.75), dir = new THREE.Vector3(Math.sin(a) * Math.sin(b), Math.cos(b), Math.cos(a) * Math.sin(b) * 0.9 - 0.15).normalize();
+      sp.position.copy(dir.clone().multiplyScalar(0.44)).add(new THREE.Vector3(0, 0.08, -0.04)); sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); hair.add(sp);
+    }
+    for (const x of [-0.2, -0.07, 0.07, 0.2]) { const f = ball(0.08, HC, x, 0.2, 0.36, 1, 1.5, 0.7); f.rotation.x = 0.6; f.rotation.z = -x * 2; hair.add(f); }
+    parts.cap = new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 6, 28), tmat(B.band)); parts.cap.scale.set(0.44, 0.44, 1); parts.cap.rotation.x = Math.PI / 2 + 0.12; parts.cap.position.set(0, 0.15, 0.0);
+    parts.brim = new THREE.Group(); parts.brim.add(tbox(0.07, 0.22, 0.04, B.band, -0.06, 0.08, -0.47), tbox(0.07, 0.26, 0.04, B.band, 0.06, 0.06, -0.48)); parts.brim.children.forEach((c, i) => { c.rotation.z = i ? -0.4 : 0.4; });
   }
-  for (const x of [-0.17, -0.06, 0.06, 0.17]) { const f = cone(0.075, 0.22, HC, x, 0.24, 0.29); f.rotation.x = 2.1; f.rotation.z = -x * 2.4; hair.add(f); }
-  parts.cap = new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 6, 28), tmat('#ffd030')); parts.cap.scale.set(0.37, 0.37, 1); parts.cap.rotation.x = Math.PI / 2 + 0.12; parts.cap.position.set(0, 0.16, 0.0);
-  parts.brim = new THREE.Group(); parts.brim.add(tbox(0.06, 0.2, 0.04, '#ffd030', -0.05, 0.08, -0.4), tbox(0.06, 0.24, 0.04, '#ffd030', 0.05, 0.06, -0.41)); parts.brim.children.forEach((c, i) => { c.material = tmat('#ffd030'); c.rotation.z = i ? -0.4 : 0.4; }); parts.brim.material = null;
   head.add(parts.face, eyes, brows, nose, mouth, cheeks, earsH, hair, parts.cap, parts.brim);
   // the leaf look: round raccoon ears and a striped tail
-  const ears = new THREE.Group(); ears.add(ball(0.12, '#b8783a', -0.24, 0.46, -0.04, 1, 1.1, 0.5), ball(0.12, '#b8783a', 0.24, 0.46, -0.04, 1, 1.1, 0.5), flat(ball(0.06, '#3a2410', -0.24, 0.46, 0.02, 1, 1.1, 0.5)), flat(ball(0.06, '#3a2410', 0.24, 0.46, 0.02, 1, 1.1, 0.5))); head.add(ears);
-  const tail = new THREE.Group(); tail.position.set(0, 0.68, -0.25); for (let i = 0; i < 5; i++) tail.add(ball(0.14 - i * 0.005, i % 2 ? '#3a2410' : '#c8884a', 0, -i * 0.04, -i * 0.14)); tail.rotation.x = -0.6;
+  const ears = new THREE.Group(); ears.add(ball(0.13, '#b8783a', -0.28, 0.5, -0.04, 1, 1.1, 0.5), ball(0.13, '#b8783a', 0.28, 0.5, -0.04, 1, 1.1, 0.5), flat(ball(0.065, '#ffc8a0', -0.28, 0.5, 0.02, 1, 1.1, 0.5)), flat(ball(0.065, '#ffc8a0', 0.28, 0.5, 0.02, 1, 1.1, 0.5))); head.add(ears);
+  const tail = new THREE.Group(); tail.position.set(0, 0.58, -0.24); for (let i = 0; i < 5; i++) tail.add(ball(0.15 - i * 0.005, i % 2 ? '#5a3418' : '#d8985a', 0, -i * 0.04, -i * 0.14)); tail.rotation.x = -0.6;
   // the frog suit: a green hood with big round eyes on top
-  const frogEyes = new THREE.Group(); frogEyes.add(dome(0.4, '#3ac83a', 0, 0.02, -0.02, 1.02, 1.05, 1.02)); for (const x of [-0.17, 0.17]) frogEyes.add(ball(0.14, '#3ac83a', x, 0.36, 0.08), eye(x, 0.38, 0.18, 1.3)); head.add(frogEyes);
+  const frogEyes = new THREE.Group(); frogEyes.add(dome(0.47, '#4ad84a', 0, 0.02, -0.02, 1.02, 1.05, 1.02)); for (const x of [-0.19, 0.19]) frogEyes.add(ball(0.15, '#4ad84a', x, 0.42, 0.1), cuteEye(x, 0.44, 0.2, 1.2, '#2a8a2a')); head.add(frogEyes);
   inner.add(legL, legR, armL, armR, parts.body, parts.shirt, parts.strapL, parts.strapR, head, tail);
-  parts.hair = hair; ink(g);
-  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, frogEyes, eyes, brows, mouth, parts, phase: 0, power: -1, blink: 0 };
+  parts.hair = hair; ink(g, 0.02); g.scale.setScalar(B.size);
+  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, frogEyes, eyes, brows, mouth, parts, phase: 0, power: -1, blink: 0, bro: B, kind };
   return g;
 }
-const paint = (m, c) => { if (m.isMesh) m.material = tmat(c); else m.children.forEach((k) => { if (k.isMesh && !k.userData.outline) k.material = tmat(c); }); };
+const paint = (m, c) => { if (m.isMesh) m.material = tmat(c); else m.children.forEach((k) => { if (k.isMesh && !k.userData.outline && k.material !== undefined && !k.userData.noInk) k.material = tmat(c); }); };
 export function poseHero(m, h, dt, t) {
-  const u = m.userData;
+  const u = m.userData, B = u.bro || BROS.josh;
   const lookKey = h.statue > 0 ? 'stone' : h.power;
   if (u.power !== lookKey) {
-    u.power = lookKey; const p = PALETTE[lookKey];
+    u.power = lookKey;
     u.inner.traverse((o) => { if (!o.isMesh || o.userData.outline) return; if (!o.userData.mat0) o.userData.mat0 = o.material; o.material = lookKey === 'stone' ? tmat('#8a8a8a') : o.userData.mat0; });
     if (lookKey !== 'stone') {
+      const p = suit(B, h.power);
       for (const k of ['cap', 'brim', 'bandL', 'bandR']) paint(u.parts[k], p.cap);
       for (const k of ['shirt', 'armLm', 'armRm']) paint(u.parts[k], p.shirt);
       for (const k of ['body', 'legLm', 'legRm']) paint(u.parts[k], p.alls);
-      u.parts.face.material = tmat(p.skin || '#ffd8b0');
+      u.parts.face.material = tmat(p.skin || B.skin);
     }
     const tailed = h.power === 3 || h.power === 4;
-    u.ears.visible = u.tail.visible = tailed; u.frogEyes.visible = h.power === 5; u.parts.hair.visible = h.power !== 5;
+    u.ears.visible = u.tail.visible = tailed; u.frogEyes.visible = h.power === 5; u.parts.hair.visible = h.power !== 5; u.parts.cap.visible = u.parts.brim.visible = h.power !== 5 && !(tailed && u.kind === 'jasper');
   }
+  const S = B.size;
   if (h.statue > 0) { m.position.set(h.x + h.w / 2, h.y, h.z + h.d / 2); u.inner.rotation.set(0, 0, 0); for (const k of ['legL', 'legR', 'armL', 'armR']) u[k].rotation.set(0, 0, 0); m.visible = true; return; }
-  // blinking, and a face that changes: a grin when running or flying, wide eyes when falling, a wince when hurt
+  // blinking, and a face that changes: a big smile running or flying, wide eyes falling, scrunched up when hurt
   u.blink -= dt; if (u.blink < -3 - Math.random() * 2) u.blink = 0.12;
-  const scared = !h.onGround && h.vy < -12 && !h.flyT, hurtNow = h.inv > 1.5;
-  u.eyes.scale.set(scared ? 1.15 : 1, u.blink > 0 || hurtNow ? 0.12 : scared ? 1.2 : 1, 1);
-  u.mouth.scale.set(1, h.flyT > 0 || Math.hypot(h.vx, h.vz || 0) > 7 || scared ? 1.4 : 0.7, 1);
-  u.brows.children[0].rotation.z = Math.PI / 2 + (hurtNow ? 0.35 : -0.2); u.brows.children[1].rotation.z = Math.PI / 2 - (hurtNow ? 0.35 : -0.2);
-  const s = h.power ? 1 : 0.62; u.inner.scale.set(h.power ? 1 : 0.9, s, h.power ? 1 : 0.9);
+  const scared = !h.onGround && h.vy < -12 && !h.flyT, hurtNow = h.inv > 1.5, happy = h.flyT > 0 || Math.hypot(h.vx, h.vz || 0) > 7;
+  u.eyes.scale.set(scared ? 1.12 : 1, u.blink > 0 || hurtNow ? 0.12 : scared ? 1.15 : 1, 1);
+  u.mouth.scale.set(happy || scared ? 1.3 : 1, happy || scared ? 1.8 : 1, 1);
+  const s = h.power ? 1 : 0.64; u.inner.scale.set(h.power ? 1 : 0.92, s, h.power ? 1 : 0.92); m.scale.setScalar(S);
   m.position.set(h.x + h.w / 2, h.y, h.z == null ? 0.1 : h.z + h.d / 2);
   const face = h.face == null ? 0 : h.face, dA = ((face - m.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
   m.rotation.y += dA * Math.min(1, dt * 16);
@@ -299,12 +325,14 @@ export function poseHero(m, h, dt, t) {
   const speed = Math.hypot(h.vx, h.vz || 0);
   if (h.pound) { u.inner.rotation.x = h.pound === 1 ? (0.18 - h.poundT) / 0.18 * Math.PI * 2 : 0; u.legL.rotation.x = u.legR.rotation.x = -1.2; return; } u.inner.rotation.x = 0;
   if (h.swimming) { u.inner.rotation.x = 1.0; const s2 = Math.sin(t * (h.power === 5 ? 14 : 8)); u.legL.rotation.x = s2 * 0.8; u.legR.rotation.x = -s2 * 0.8; u.armL.rotation.x = -2 + s2; u.armR.rotation.x = -2 - s2; m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2); return; }
-  u.inner.rotation.x = h.onGround ? Math.min(0.3, speed * 0.025) : 0;
+  u.inner.rotation.x = h.onGround ? Math.min(0.25, speed * 0.02) : 0;
   if (!h.onGround) { u.legL.rotation.x = -0.9; u.legR.rotation.x = 0.6; u.armL.rotation.x = -2.7; u.armR.rotation.x = 0.5; u.armR.rotation.z = 0.4; if (h.flyT > 0 || h.wag > 0) u.armL.rotation.x = u.armR.rotation.x = -1.4 + Math.sin(t * 30) * 0.6; }
-  else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 1.0; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; u.armL.rotation.z = -0.2; u.armR.rotation.z = 0.2; }
-  u.head.position.y = 1.42 + (h.onGround ? Math.abs(Math.sin(u.phase)) * Math.min(1, speed / 6) * 0.05 + Math.sin(t * 2.2) * 0.012 : 0);
-  u.parts.brim.rotation.x = Math.min(0.9, speed * 0.08) + Math.sin(t * 9) * 0.08 * Math.min(1, speed / 4);
-  u.inner.position.y = h.power === 5 && h.onGround && speed > 0.5 ? Math.abs(Math.sin(u.phase)) * 0.3 : 0;
+  else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 1.0; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; u.armL.rotation.z = -0.25; u.armR.rotation.z = 0.25; }
+  // a happy little bounce: the head bobs and the whole body squashes a touch with each step
+  const bob = h.onGround ? Math.abs(Math.sin(u.phase)) * Math.min(1, speed / 6) : 0;
+  u.head.position.y = 1.3 + bob * 0.06 + Math.sin(t * 2.2) * 0.014; u.head.rotation.z = Math.sin(u.phase) * 0.05 * Math.min(1, speed / 5);
+  u.parts.brim.rotation.x = u.kind === 'josh' ? Math.min(0.9, speed * 0.08) + Math.sin(t * 9) * 0.08 * Math.min(1, speed / 4) : 0;
+  u.inner.position.y = h.power === 5 && h.onGround && speed > 0.5 ? Math.abs(Math.sin(u.phase)) * 0.3 : bob * 0.04;
   u.tail.rotation.y = Math.sin(t * (h.wag > 0 || h.flyT > 0 ? 40 : 4)) * 0.5;
   m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2);
 }
@@ -317,7 +345,7 @@ export function makeEnemy(e) {
     // a spiny: a round red shell bristling with spikes, a scowling little face, quick feet
     inner.add(ball(0.42, '#e83a2a', 0, 0.44, -0.04, 1, 0.9, 1), ball(0.3, '#ffe0a0', 0, 0.3, 0.18, 1, 0.82, 0.75));
     for (let i = 0; i < 11; i++) { const a = i / 11 * Math.PI * 2, r = i % 2 ? 0.2 : 0.32, sp = cone(0.08, 0.26, '#ffffff', Math.cos(a) * r, 0.74 + (i % 2) * 0.06, Math.sin(a) * r - 0.08); sp.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6); inner.add(sp); }
-    inner.add(eye(-0.11, 0.36, 0.38, 1, '#141014', -0.25), eye(0.11, 0.36, 0.38, 1, '#141014', 0.25), brow(-0.11, 0.47, 0.42, 0.45, 0.9), brow(0.11, 0.47, 0.42, -0.45, 0.9));
+    inner.add(cuteEye(-0.11, 0.35, 0.38, 1.05, '#5a2a1a'), cuteEye(0.11, 0.35, 0.38, 1.05, '#5a2a1a'), flat(ball(0.05, '#ff8a9a', -0.2, 0.26, 0.4, 1, 0.6, 0.3)), flat(ball(0.05, '#ff8a9a', 0.2, 0.26, 0.4, 1, 0.6, 0.3)));
     u.feet = [ball(0.13, '#ffc060', -0.17, 0.07, 0.08, 1, 0.6, 1.35), ball(0.13, '#ffc060', 0.17, 0.07, 0.08, 1, 0.6, 1.35)]; inner.add(...u.feet);
     u.wings = new THREE.Group(); inner.add(u.wings);
   } else if (e.kind === 'walker') {
@@ -325,9 +353,9 @@ export function makeEnemy(e) {
     const cap = dome(0.52, sk[0], 0, 0.42, 0, 1.12, 1.02, 1.08), under = disc(0.5, 0.07, shade(sk[0], 1.35), 0, 0.42, 0);
     inner.add(cap, under, ball(0.35, sk[1], 0, 0.3, 0.02, 1.05, 0.78, 0.95));
     for (const [x, y, z, r] of [[0.28, 0.74, 0.25, 0.1], [-0.32, 0.62, 0.3, 0.09], [0.04, 0.9, -0.1, 0.12], [-0.2, 0.7, -0.38, 0.09]]) inner.add(ball(r, '#ffffff', x, y, z, 1, 0.45, 1));
-    inner.add(eye(-0.13, 0.36, 0.3, 1.2, '#141014', -0.2), eye(0.13, 0.36, 0.3, 1.2, '#141014', 0.2), brow(-0.13, 0.5, 0.34, 0.45), brow(0.13, 0.5, 0.34, -0.45));
-    const m2 = grin(0.15, 0.31, 0.95); inner.add(m2);
-    for (const x of [-0.08, 0.08]) { const f = flat(cone(0.03, 0.08, '#ffffff', x, 0.18, 0.34)); f.rotation.x = Math.PI; inner.add(f); }
+    inner.add(cuteEye(-0.13, 0.35, 0.3, 1.3, '#3a1a0a'), cuteEye(0.13, 0.35, 0.3, 1.3, '#3a1a0a'), brow(-0.13, 0.5, 0.34, -0.15, 0.8), brow(0.13, 0.5, 0.34, 0.15, 0.8), flat(ball(0.06, '#ff8a9a', -0.24, 0.22, 0.32, 1, 0.6, 0.3)), flat(ball(0.06, '#ff8a9a', 0.24, 0.22, 0.32, 1, 0.6, 0.3)));
+    const m2 = smile(0.16, 0.33, 1.1); inner.add(m2);
+    for (const x of [-0.06]) { const f = flat(cone(0.025, 0.06, '#ffffff', x, 0.14, 0.35)); f.rotation.x = Math.PI; inner.add(f); }
     if (e.skin === 'snow') { const muff = new THREE.Mesh(TOR, tmat('#e83a5a')); muff.scale.set(0.36, 0.36, 0.3); muff.rotation.x = Math.PI / 2; muff.position.y = 0.24; inner.add(muff); }
     if (e.skin === 'desert') inner.add(disc(0.56, 0.07, '#e83a2a', 0, 0.62, 0));
     if (e.skin === 'volcano') inner.add(cone(0.1, 0.3, '#ffd030', -0.3, 0.86, 0), cone(0.1, 0.3, '#ffd030', 0.3, 0.86, 0));
@@ -340,7 +368,7 @@ export function makeEnemy(e) {
     const shell = new THREE.Group(); shell.add(dome(0.46, col, 0, 0.22, 0, 1, 1.2, 1.15), disc(0.48, 0.13, '#fff4c8', 0, 0.22, 0));
     for (let i = 0; i < 6; i++) { const a = i / 6 * Math.PI * 2, p = flat(disc(0.14, 0.03, shade(col, 1.4), Math.cos(a) * 0.27, 0.53, Math.sin(a) * 0.3)); p.rotation.set(Math.sin(a) * 0.75, 0, -Math.cos(a) * 0.75); shell.add(p); } shell.add(flat(disc(0.15, 0.03, shade(col, 1.4), 0, 0.76, 0)));
     const body = new THREE.Group();
-    const head = new THREE.Group(); head.position.set(0, 1.08, 0.32); head.add(ball(0.25, '#ffd040', 0, 0, 0, 1, 1.05, 1.1), ball(0.13, '#ffe070', 0, -0.07, 0.18, 1.25, 0.8, 1), eye(-0.09, 0.08, 0.19, 1.15), eye(0.09, 0.08, 0.19, 1.15), flat(tbox(0.12, 0.02, 0.02, '#3a1a08', 0, -0.08, 0.31)));
+    const head = new THREE.Group(); head.position.set(0, 1.08, 0.32); head.add(ball(0.25, '#ffd040', 0, 0, 0, 1, 1.05, 1.1), ball(0.13, '#ffe070', 0, -0.07, 0.18, 1.25, 0.8, 1), cuteEye(-0.09, 0.08, 0.19, 1.2, '#3a2a1a'), cuteEye(0.09, 0.08, 0.19, 1.2, '#3a2a1a'), flat(ball(0.04, '#ff8a9a', -0.17, -0.02, 0.2, 1, 0.6, 0.3)), flat(ball(0.04, '#ff8a9a', 0.17, -0.02, 0.2, 1, 0.6, 0.3)), smile(-0.09, 0.3, 0.7));
     body.add(pill(0.15, 0.4, '#ffd040', 0, 0.68, 0.24), head, pill(0.075, 0.22, '#ffd040', -0.27, 0.62, 0.3), pill(0.075, 0.22, '#ffd040', 0.27, 0.62, 0.3), ball(0.14, '#e83a3a', -0.18, 0.08, 0.2, 1, 0.6, 1.45), ball(0.14, '#e83a3a', 0.18, 0.08, 0.2, 1, 0.6, 1.45), cone(0.06, 0.2, '#ffd040', 0, 0.3, -0.47));
     body.children[body.children.length - 1].rotation.x = -Math.PI / 2;
     inner.add(shell, body); u.body = body; u.shell = shell; u.feet = [body.children[4], body.children[5]];
@@ -358,19 +386,18 @@ export function makeEnemy(e) {
     // a fish: round and red, pouting lips, goggling eyes, frilly fins
     inner.add(ball(0.42, '#ff5a3a', 0, 0.32, 0, 0.8, 0.92, 1.15), ball(0.3, '#ffe6d0', 0, 0.2, 0.08, 0.72, 0.58, 1));
     const fin = new THREE.Group(); fin.position.set(0, 0.32, -0.46); fin.add(ball(0.24, '#fff0e0', 0, 0.08, -0.08, 0.2, 1, 0.75)); u.fin = fin;
-    inner.add(fin, eye(0.2, 0.46, 0.3, 1.35), eye(-0.2, 0.46, 0.3, 1.35), ball(0.1, '#ffd040', 0, 0.24, 0.48, 1.4, 0.85, 0.6), ball(0.17, '#fff0e0', 0, 0.68, -0.05, 0.25, 0.8, 1));
+    inner.add(fin, cuteEye(0.2, 0.46, 0.3, 1.35, '#1a3a8a'), cuteEye(-0.2, 0.46, 0.3, 1.35, '#1a3a8a'), ball(0.1, '#ffd040', 0, 0.24, 0.48, 1.4, 0.85, 0.6), ball(0.17, '#fff0e0', 0, 0.68, -0.05, 0.25, 0.8, 1));
     for (const s of [-1, 1]) inner.add(ball(0.15, '#fff0e0', s * 0.32, 0.3, 0.05, 0.25, 0.6, 1));
   } else if (e.kind === 'bat') {
     // a bat: a round purple fuzzball with tall ears, huge yellow eyes, two fangs and leathery wings
-    inner.add(ball(0.28, '#6a3a9a', 0, 0.3, 0), cone(0.09, 0.26, '#6a3a9a', -0.13, 0.62, 0), cone(0.09, 0.26, '#6a3a9a', 0.13, 0.62, 0), eye(-0.1, 0.36, 0.22, 1.1, '#141014'), eye(0.1, 0.36, 0.22, 1.1, '#141014'));
-    inner.children[3].children[0].material = tmat('#ffe040'); inner.children[4].children[0].material = tmat('#ffe040');
+    inner.add(ball(0.28, '#6a3a9a', 0, 0.3, 0), cone(0.09, 0.26, '#6a3a9a', -0.13, 0.62, 0), cone(0.09, 0.26, '#6a3a9a', 0.13, 0.62, 0), cuteEye(-0.1, 0.35, 0.22, 1.15, '#e8a020'), cuteEye(0.1, 0.35, 0.22, 1.15, '#e8a020'), flat(ball(0.045, '#ff8ab0', -0.17, 0.26, 0.22, 1, 0.6, 0.3)), flat(ball(0.045, '#ff8ab0', 0.17, 0.26, 0.22, 1, 0.6, 0.3)));
     for (const x of [-0.05, 0.05]) { const f = flat(cone(0.025, 0.07, '#ffffff', x, 0.2, 0.24)); f.rotation.x = Math.PI; inner.add(f); }
     const wings = new THREE.Group(); for (const s of [-1, 1]) { const w = new THREE.Group(); w.position.set(s * 0.22, 0.34, 0); const sh = new THREE.Shape(); sh.moveTo(0, 0); sh.lineTo(s * 0.6, 0.16); sh.lineTo(s * 0.5, -0.1); sh.lineTo(s * 0.34, 0.0); sh.lineTo(s * 0.2, -0.13); sh.closePath(); const wm = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshToonMaterial({ color: '#4a2a7a', gradientMap: GRAD, side: THREE.DoubleSide })); wm.userData.noInk = true; wm.rotation.x = -Math.PI / 2 + 0.3; w.add(wm); w.userData.s = s; wings.add(w); } inner.add(wings); u.wings = wings;
   } else if (e.kind === 'pokey') {
     // a cactus stack: green balls bristling with spikes, a goofy face on the top one and a pink flower on its head
     u.segs = [];
     for (let i = 0; i < 3; i++) { const s = new THREE.Group(); s.position.y = 0.4 + i * 0.8; s.add(ball(0.43, '#6ac83a')); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, sp = flat(cone(0.045, 0.17, '#fff8d0', Math.cos(a) * 0.43, (k % 2) * 0.15 - 0.07, Math.sin(a) * 0.43)); sp.rotation.set(Math.sin(a) * 1.5, 0, -Math.cos(a) * 1.5); s.add(sp); } inner.add(s); u.segs.push(s); }
-    u.face = new THREE.Group(); u.face.add(eye(-0.14, 0.08, 0.38, 1.4), eye(0.14, 0.08, 0.38, 1.4), grin(-0.16, 0.39, 0.9)); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; u.face.add(ball(0.09, '#ff7aa8', Math.cos(a) * 0.11, 0.5, Math.sin(a) * 0.11)); } u.face.add(ball(0.065, '#ffd030', 0, 0.52, 0));
+    u.face = new THREE.Group(); u.face.add(cuteEye(-0.14, 0.08, 0.38, 1.45, '#2a5a1a'), cuteEye(0.14, 0.08, 0.38, 1.45, '#2a5a1a'), smile(-0.15, 0.4, 1), flat(ball(0.06, '#ff8ab0', -0.26, -0.06, 0.34, 1, 0.6, 0.3)), flat(ball(0.06, '#ff8ab0', 0.26, -0.06, 0.34, 1, 0.6, 0.3))); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; u.face.add(ball(0.09, '#ff7aa8', Math.cos(a) * 0.11, 0.5, Math.sin(a) * 0.11)); } u.face.add(ball(0.065, '#ffd030', 0, 0.52, 0));
     inner.add(u.face);
   } else if (e.kind === 'boss' && e.prince) {
     // the little prince: a cheeky brat in a blue cap with a magic wand
@@ -503,13 +530,14 @@ export function buildWorldView(scene, G) {
   const coinMat = new THREE.MeshLambertMaterial({ color: '#ffd030', emissive: '#7a5000' });
   const chunks = new Array(NX * NZ).fill(null), dirty = new Set(), api0 = {};
   const inside = (x, z) => x >= 0 && z >= 0 && x < L.w && z < L.d;
-  const op = (x, y, z) => inside(x, z) && y >= 0 && y < L.h && opaque(L.tiles[(y * L.d + z) * L.w + x]);
+  const op = (x, y, z) => inside(x, z) && y >= 0 && y < L.h && opaque(L.get(x, y, z));
   function buildChunk(cx, cz) {
     const old = chunks[cz * NX + cx]; if (old) { group.remove(old.g); old.g.traverse((o) => { if (o.geometry && o.geometry !== coinGeo) o.geometry.dispose(); }); }
     const land = { p: [], n: [], u: [], c: [], i: [] }, lava = { p: [], n: [], u: [], i: [] }, water = { p: [], n: [], i: [] }, coins = [];
     const x0 = cx * CH, z0 = cz * CH, x1 = Math.min(L.w, x0 + CH), z1 = Math.min(L.d, z0 + CH);
-    for (let y = 0; y < L.h; y++) for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
-      const t = L.tiles[(y * L.d + z) * L.w + x];
+    const col = L.store.c[cz * L.store.NX + cx];
+    for (let y = col.y0; y < col.y1; y++) for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
+      const t = col.a[((y - col.y0) << 8) | ((z & 15) << 4) | (x & 15)];
       if (t === T.EMPTY || t === T.PIPE || t === T.PIPETOP || t === T.HIDDEN) continue;
       if (t === T.COIN) { coins.push([x, y, z]); continue; }
       if (t === T.WATER) {
@@ -553,9 +581,10 @@ export function buildWorldView(scene, G) {
   // pipes, round
   for (const p of G.def.pipes || []) group.add(pipeMesh(p.x, p.z, p.base, p.hgt));
   // the sea beyond the island, and clouds far off
-  const sea = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#2a7ad8' })); sea.rotation.x = -Math.PI / 2; sea.position.set(L.w / 2, 16.85, L.d / 2); group.add(sea); api0.sea = sea;
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(4000, 4000), new THREE.MeshLambertMaterial({ color: '#2a7ad8' })); sea.rotation.x = -Math.PI / 2; sea.position.set(L.w / 2, (L.seaY ?? 16) + 0.85, L.d / 2); group.add(sea); api0.sea = sea;
   const sky = new THREE.Group(), r = mulberry(77); group.add(sky);
-  for (let i = 0; i < 140; i++) { const cg = new THREE.Group(); for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(3 + r() * 3, 10, 8), cmat('#ffffff', '#c0d0e0')); s.position.set(k * 4, (k % 2) * 1.5, r() * 2); cg.add(s); } cg.position.set(-200 + r() * (L.w + 400), 74 + r() * 30, -200 + r() * (L.d + 400)); sky.add(cg); }
+  for (let i = 0; i < 140; i++) { const cg = new THREE.Group(); for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(3 + r() * 3, 10, 8), cmat('#ffffff', '#c0d0e0')); s.position.set(k * 4, (k % 2) * 1.5, r() * 2); cg.add(s); } cg.position.set(-200 + r() * (L.w + 400), (L.seaY ?? 16) + 60 + r() * 40, -200 + r() * (L.d + 400)); sky.add(cg); }
+  group.add(farLand(L));
   // the finish lines with their spinning card boxes, and the checkpoint flags
   const goals = (G.goals || []).map((gl) => {
     const gx = gl.x + 0.8, dd = gl.z1 - gl.z0;
@@ -600,6 +629,20 @@ export function buildWorldView(scene, G) {
   };
   return api;
 }
+function farLand(L) {
+  const S = 4, nx = Math.floor(L.w / S) + 1, nz = Math.floor(L.d / S) + 1, pos = new Float32Array(nx * nz * 3), col = new Float32Array(nx * nz * 3), idx = [];
+  const sea = L.seaY ?? 16, gy = sea + 1;
+  const C = { 0: [0.36, 0.72, 0.3], 1: [0.94, 0.96, 1], 2: [0.42, 0.62, 0.3], 3: [0.92, 0.78, 0.48], 4: [0.3, 0.24, 0.26], 5: [0.9, 0.84, 0.6], 6: [0.4, 0.6, 0.34], 7: [0.85, 0.78, 0.55] };
+  for (let j = 0; j < nz; j++) for (let i = 0; i < nx; i++) {
+    const x = Math.min(L.w - 1, i * S), z = Math.min(L.d - 1, j * S), hm = L.heightMap[z * L.w + x], sf = L.surf ? L.surf(x, z) : hm, h = Math.min(hm, sf), b = L.biome[z * L.w + x], k = (j * nx + i) * 3;
+    pos[k] = x + 0.5; pos[k + 1] = h - 2.2; pos[k + 2] = z + 0.5;
+    let c = C[b] || C[0]; if (h > gy + 40) c = [0.95, 0.97, 1]; else if (h > gy + 20 && b !== 4) c = [0.55, 0.55, 0.6]; if (h <= sea + 1 && b !== 4) c = [0.9, 0.84, 0.6];
+    const shade = 0.8 + Math.min(0.25, (h - gy) / 400); col[k] = c[0] * shade; col[k + 1] = c[1] * shade; col[k + 2] = c[2] * shade;
+  }
+  for (let j = 0; j < nz - 1; j++) for (let i = 0; i < nx - 1; i++) { const a = j * nx + i, b = a + 1, c = a + nx, d = c + 1; idx.push(a, c, b, b, c, d); }
+  const g = new THREE.BufferGeometry(); g.setAttribute('position', new THREE.BufferAttribute(pos, 3)); g.setAttribute('color', new THREE.BufferAttribute(col, 3)); g.setIndex(idx); g.computeVertexNormals();
+  const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ vertexColors: true })); m.receiveShadow = false; return m;
+}
 // a name on a little wooden board, always facing you
 function labelSprite([zh, en]) {
   const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
@@ -610,12 +653,13 @@ function labelSprite([zh, en]) {
 }
 // a top-down picture of the whole island for the map screen
 export function worldMapImage(W0) {
-  const c = document.createElement('canvas'); c.width = W0.w; c.height = W0.d; const g = c.getContext('2d'), img = g.createImageData(W0.w, W0.d);
+  const S = 2, w = Math.ceil(W0.w / S), d = Math.ceil(W0.d / S), c = document.createElement('canvas'); c.width = w; c.height = d; const g = c.getContext('2d'), img = g.createImageData(w, d);
   const COL = { [T.GROUND]: [90, 190, 80], [T.SAND]: [240, 216, 152], [T.STONE]: [140, 140, 152], [T.SNOW]: [244, 248, 255], [T.LEAVES]: [40, 140, 60], [T.LOG]: [40, 140, 60], [T.WATER]: [50, 130, 230], [T.LAVA]: [255, 90, 20], [T.CLOUD]: [255, 255, 255], [T.PLANK]: [176, 122, 64], [T.WALL]: [248, 240, 220], [T.ROOF]: [232, 48, 42], [T.SPADE]: [42, 154, 74], [T.PIPETOP]: [42, 184, 42], [T.BRICK]: [200, 100, 30], [T.HARD]: [232, 176, 112], [T.ICE]: [190, 228, 248], [T.BASALT]: [70, 56, 62], [T.SANDSTONE]: [232, 192, 120], [T.STEM]: [244, 234, 212], [T.CAPBLUE]: [58, 122, 232], [T.CAPGOLD]: [240, 176, 32], [T.CACTUS]: [58, 154, 58], [T.XMARK]: [90, 190, 80] };
-  for (let z = 0; z < W0.d; z++) for (let x = 0; x < W0.w; x++) {
-    let col = [42, 122, 216], hgt = 0;
-    for (let y = W0.h - 1; y >= 0; y--) { const t = W0.tiles[(y * W0.d + z) * W0.w + x]; if (t !== T.EMPTY && t !== T.COIN) { col = COL[t] || [200, 180, 140]; hgt = y; break; } }
-    const k = 0.75 + Math.min(0.4, hgt / 120), i = (z * W0.w + x) * 4; img.data[i] = Math.min(255, col[0] * k); img.data[i + 1] = Math.min(255, col[1] * k); img.data[i + 2] = Math.min(255, col[2] * k); img.data[i + 3] = 255;
+  const sea = W0.seaY ?? 16;
+  for (let j = 0; j < d; j++) for (let i = 0; i < w; i++) {
+    const x = i * S, z = j * S, top = W0.surf(x, z), t = W0.get(x, top - 1, z), wet = top <= sea;
+    let col = wet ? [Math.max(10, 50 - (sea - top) * 0.3), Math.max(30, 130 - (sea - top) * 0.8), Math.max(80, 230 - (sea - top) * 1.1)] : COL[t] || [200, 180, 140];
+    const k = wet ? 1 : 0.78 + Math.min(0.45, (top - sea) / 260), p = (j * w + i) * 4; img.data[p] = Math.min(255, col[0] * k); img.data[p + 1] = Math.min(255, col[1] * k); img.data[p + 2] = Math.min(255, col[2] * k); img.data[p + 3] = 255;
   }
   g.putImageData(img, 0, 0); return c;
 }

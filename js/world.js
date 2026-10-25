@@ -6,10 +6,29 @@
 // with a lighthouse and a shipwreck. Hidden all over it are secret stars: on the tallest treetop and the highest peak,
 // inside invisible blocks, under an X you must ground-pound, behind cracked brick walls, at the end of sets of eight
 // red coins, down unmarked pipes, under the sea. Old stone tablets whisper riddles about where to look.
-import { T } from './game.js?v=6';
-import { LEVELS } from './levels.js?v=6';
+import { T } from './game.js?v=7';
+import { LEVELS } from './levels.js?v=7';
 
-export const W = 576, D = 576, H = 80, GY = 17, SEA = 16;   // you stand at y = GY on flat land; water fills up to y = SEA
+// everything sits Y0 blocks up, so the sea has room to be deep and the tallest mountain room to be ten times taller
+export const Y0 = 112, W = 816, D = 816, H = 368, GY = 17 + Y0, SEA = 16 + Y0;   // you stand at y = GY on flat land; water fills up to y = SEA
+// the world's blocks, kept in 16 × 16 columns that each hold only their own range of heights; below a column's
+// range is solid stone, above it is open air (so the deep sea and the giant mountain don't cost the whole world memory)
+export class Store {
+  constructor(w, d, h) { this.w = w; this.d = d; this.h = h; this.NX = Math.ceil(w / 16); this.NZ = Math.ceil(d / 16); this.c = new Array(this.NX * this.NZ).fill(null); }
+  init(cx, cz, y0, y1) { y0 = Math.max(0, y0 & ~3); y1 = Math.min(this.h, y1); this.c[cz * this.NX + cx] = { y0, y1, a: new Uint8Array(256 * (y1 - y0)) }; }
+  col(x, z) { return this.c[(z >> 4) * this.NX + (x >> 4)]; }
+  get(x, y, z) { const c = this.c[(z >> 4) * this.NX + (x >> 4)]; if (y < c.y0) return y < 0 ? T.EMPTY : T.STONE; if (y >= c.y1) return T.EMPTY; return c.a[((y - c.y0) << 8) | ((z & 15) << 4) | (x & 15)]; }
+  set(x, y, z, t) {
+    const c = this.c[(z >> 4) * this.NX + (x >> 4)];
+    if (y < c.y0) { if (t === T.STONE || y < 0) return; this.grow(c, y - 4, c.y1); }
+    else if (y >= c.y1) { if (t === T.EMPTY || y >= this.h) return; this.grow(c, c.y0, y + 16); }
+    c.a[((y - c.y0) << 8) | ((z & 15) << 4) | (x & 15)] = t;
+  }
+  grow(c, y0, y1) {
+    y0 = Math.max(0, Math.min(c.y0, y0)); y1 = Math.min(this.h, Math.max(c.y1, y1)); const a = new Uint8Array(256 * (y1 - y0));
+    a.fill(T.STONE, 0, 256 * (c.y0 - y0)); a.set(c.a, 256 * (c.y0 - y0)); c.a = a; c.y0 = y0; c.y1 = y1;
+  }
+}
 export const OX = 40, OZ = 150;                              // where the old heartland sits in the big world
 const B = (zh, en) => [zh, en];
 // where each course is set: its corner in the world and how high its ground sits
@@ -17,14 +36,15 @@ export const COURSES = {
   '1-1': { ox: 26 + OX, oz: 132 + OZ, oy: GY - 2, region: B('草原小路', 'Meadow Path') },
   '1-2': { ox: 44 + OX, oz: 36 + OZ, oy: GY - 2, region: B('起伏山丘', 'Rolling Hills') },
   '1-4': { ox: 112 + OX, oz: 90 + OZ, oy: GY - 2, region: B('水管森林', 'Pipe Grove') },
-  '1-3': { ox: 64 + OX, oz: 112 + OZ, oy: 33, region: B('天空雲橋', 'Cloud Bridges') },
-  '1-6': { ox: 92 + OX, oz: 58 + OZ, oy: 46, region: B('雲上運動場', 'Sky Gym') },
+  '1-3': { ox: 64 + OX, oz: 112 + OZ, oy: 33 + Y0, region: B('天空雲橋', 'Cloud Bridges') },
+  '1-6': { ox: 92 + OX, oz: 58 + OZ, oy: 46 + Y0, region: B('雲上運動場', 'Sky Gym') },
   '1-W': { ox: 44 + OX, oz: 200 + OZ, oy: GY - 12, region: B('海底灣', 'Coral Bay') },
   '1-5': { ox: 112 + OX, oz: 16 + OZ, oy: GY - 2, region: B('地底洞窟', 'Underground Cave'), inside: 'mountain' },
   '1-F': { ox: 140 + OX, oz: 160 + OZ, oy: GY - 2, region: B('石頭堡壘', 'Stone Fortress'), inside: 'castle' },
-  '1-A': { ox: 136 + OX, oz: 230 + OZ, oy: 40, region: B('飛行船', 'The Airship') },
+  '1-A': { ox: 136 + OX, oz: 230 + OZ, oy: 40 + Y0, region: B('飛行船', 'The Airship') },
 };
-export const ORDER = ['1-1', '1-2', '1-3', '1-4', '1-F', '1-W', '1-5', '1-6', '1-A'];
+COURSES['1-D'] = { ox: 380, oz: 712, oy: Y0 - 100, w: 40, d: 40, h: 128, gen: true, region: B('深海峽谷', 'The Deep Trench') };
+export const ORDER = ['1-1', '1-2', '1-3', '1-4', '1-F', '1-W', '1-5', '1-6', '1-D', '1-A'];
 // the lands beyond the heartland: each has a warp pipe at its landmark (it opens once you have been there)
 export const LANDS = {
   snow: { name: B('霜峰雪原', 'Frostpeak Snowfields'), theme: 'sky', sky: 'snow' },
@@ -32,10 +52,12 @@ export const LANDS = {
   desert: { name: B('烈陽沙漠', 'Sunsand Desert'), theme: 'airship', sky: 'desert' },
   volcano: { name: B('餘燼火山', 'Mount Ember'), theme: 'fort', sky: 'volcano' },
   isles: { name: B('南方群島', 'Southern Isles'), theme: 'water', sky: 'water' },
+  peak: { name: B('天梯峰', 'Skyreach Peak'), theme: 'sky', sky: 'snow' },
+  abyss: { name: B('深淵大洋', 'The Abyssal Sea'), theme: 'water', sky: 'water' },
 };
 export const PLACES = { ...Object.fromEntries(Object.entries(COURSES).map(([id, c]) => [id, { name: c.region }])), ...LANDS };
-export const LAND_ORDER = ['snow', 'forest', 'desert', 'volcano', 'isles'];
-const BIOME = ['core', 'snow', 'forest', 'desert', 'volcano', 'isles'];
+export const LAND_ORDER = ['snow', 'forest', 'desert', 'volcano', 'isles', 'peak', 'abyss'];
+const BIOME = ['core', 'snow', 'forest', 'desert', 'volcano', 'isles', 'peak', 'abyss'];
 
 // ---------------------------------------------------------------- a little noise for the land
 function hash2(x, z, s) { let h = (x * 374761393 + z * 668265263 + s * 2246822519) | 0; h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
@@ -47,19 +69,20 @@ function mulberry(a) { return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Ma
 // the landmarks of the new lands
 const VOLC = [462, 478], PYR = [482, 214], TOWN = [404, 296], OASIS = [446, 334], LAKE = [150, 62], ICEMT = [262, 44];
 const ISLES = [[86, 474, 15], [156, 506, 9], [224, 466, 9], [286, 522, 11], [112, 544, 8], [200, 548, 7]];
+export const PEAK = [690, 300], PEAK_R = 130, PEAK_H = 220;   // the giant mountain: ten times the height of the old peaks
 
 export function buildWorld() {
-  const tiles = new Uint8Array(W * H * D), idx = (x, y, z) => (y * D + z) * W + x;
+  const store = new Store(W, D, H);
   const inb = (x, y, z) => x >= 0 && x < W && y >= 0 && y < H && z >= 0 && z < D;
-  const get = (x, y, z) => (inb(x, y, z) ? tiles[idx(x, y, z)] : T.EMPTY);
-  const set = (x, y, z, t) => { if (inb(x, y, z)) tiles[idx(x, y, z)] = t; };
+  const get = (x, y, z) => (inb(x, y, z) ? store.get(x, y, z) : T.EMPTY);
+  const set = (x, y, z, t) => { if (inb(x, y, z)) store.set(x, y, z, t); };
   const fill = (x0, y0, z0, x1, y1, z1, t) => { for (let y = y0; y <= y1; y++) for (let z = z0; z <= z1; z++) for (let x = x0; x <= x1; x++) set(x, y, z, t); };
-  const W0 = { w: W, h: H, d: D, tiles, ents: [], goals: [], checks: [], pipes: [], warps: [], doors: [], signs: [], hints: [], secrets: [], secretAt: {}, reds: [], world: true, theme: 'grass', start: [20 + OX, GY, 112 + OZ], stairs: {}, regions: [] };
+  const W0 = { w: W, h: H, d: D, store, get: (x, y, z) => store.get(x, y, z), set: (x, y, z, t) => store.set(x, y, z, t), killY: Y0 - 6, cannons: [], ents: [], goals: [], checks: [], pipes: [], warps: [], doors: [], signs: [], hints: [], secrets: [], secretAt: {}, reds: [], world: true, theme: 'grass', start: [20 + OX, GY, 112 + OZ], stairs: {}, regions: [] };
   const rnd = mulberry(20241024);
   const reserved = new Uint8Array(W * D), reserve = (x0, z0, x1, z1) => { for (let z = Math.max(0, z0); z <= Math.min(D - 1, z1); z++) for (let x = Math.max(0, x0); x <= Math.min(W - 1, x1); x++) reserved[z * W + x] = 1; };
 
   // ---------------------------------------------------------------- the lie of the land
-  const rects = Object.entries(COURSES).map(([id, c]) => ({ id, ...c, w: LEVELS[id].w, d: LEVELS[id].d, h: LEVELS[id].h }));
+  const rects = Object.entries(COURSES).filter(([, c]) => !c.gen).map(([id, c]) => ({ id, ...c, w: LEVELS[id].w, d: LEVELS[id].d, h: LEVELS[id].h }));
   const outside = (x, z, r, m) => { const dx = Math.max(r.ox - m - x, 0, x - (r.ox + r.w - 1 + m)), dz = Math.max(r.oz - m - z, 0, z - (r.oz + r.d - 1 + m)); return Math.hypot(dx, dz); };
   const heightMap = new Int16Array(W * D), biome = new Uint8Array(W * D);
   for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
@@ -69,7 +92,7 @@ export function buildWorld() {
     h += Math.round(smooth(80, 30, cz) * smooth(-60, -10, cz) * fbm(x / 22, z / 22, 4) * 7);
     const mx = smooth(96, 118, cx) * smooth(48, 30, cz) * smooth(-40, 0, cz) * smooth(300, 270, cx), ridge = 1 - Math.abs(noise(x / 26, z / 26, 9) * 2 - 1);
     h += Math.round(mx * (16 + ridge * 14));
-    const bay = smooth(178, 196, cz) * smooth(300, 280, cx); h = Math.round(lerp(h, 9 + n * 3, bay));
+    const bay = smooth(178, 196, cz) * smooth(300, 280, cx); h = Math.round(lerp(h, Y0 + 9 + n * 3, bay));
     // the snowfields: rolling white land and sharp peaks
     const north = smooth(140, 104, z) * smooth(360, 330, x);
     if (north > 0) { const pk = Math.pow(Math.max(0, 1 - Math.abs(noise(x / 34, z / 34, 21) * 2 - 1) - 0.25), 2) * 70; const sh = GY + 2 + Math.round(fbm(x / 30, z / 30, 20) * 7 + pk); h = Math.round(lerp(h, sh, north)); }
@@ -83,29 +106,41 @@ export function buildWorld() {
     }
     // the southern sea and its islands
     const south = smooth(410, 446, z) * (1 - smooth(310, 350, x));
-    if (south > 0) { let sh = 8 + n * 3; for (const [ix, iz, ir] of ISLES) { const d = Math.hypot(x - ix, z - iz); if (d < ir + 6) sh = Math.max(sh, GY + 2.5 - Math.max(0, d - ir * 0.55) * 1.1); } h = Math.round(lerp(h, sh, south)); }
+    if (south > 0) { let sh = Y0 + 8 + n * 3; for (const [ix, iz, ir] of ISLES) { const d = Math.hypot(x - ix, z - iz); if (d < ir + 6) sh = Math.max(sh, GY + 2.5 - Math.max(0, d - ir * 0.55) * 1.1); } h = Math.round(lerp(h, sh, south)); }
+    // far to the east, the Skyreach range and its giant peak
+    const range = smooth(560, 600, x) * smooth(-20, 40, z) * smooth(560, 520, z);
+    if (range > 0) { const dp = Math.hypot(x - PEAK[0], (z - PEAK[1]) * 0.9), cone = dp < PEAK_R ? PEAK_H * Math.pow(1 - dp / PEAK_R, 1.5) : 0, foot = GY + 4 + Math.round(fbm(x / 30, z / 30, 51) * 14 + Math.pow(Math.max(0, 1 - Math.abs(noise(x / 40, z / 40, 52) * 2 - 1) - 0.3), 2) * 50);
+      h = Math.round(lerp(h, Math.max(foot, GY + cone + fbm(x / 12, z / 12, 53) * 6 * Math.min(1, dp / 20)), range)); }
+    // far to the south, the land drops away into the abyssal sea, with a trench at its deepest
+    const deep = smooth(588, 640, z);
+    if (deep > 0) { const tr = Math.max(0, 1 - Math.abs(z - 740) / 46) * smooth(120, 200, x) * smooth(700, 620, x); const bed = Y0 - 40 + fbm(x / 26, z / 26, 61) * 16 - tr * 62; h = Math.round(lerp(h, bed, deep)); }
     // the edge of the world is the open sea
-    h = Math.round(lerp(h, 7, smooth(22, 3, edge)));
+    h = Math.round(lerp(h, Y0 + 7, smooth(22, 3, edge)));
     // flat where the ground courses run, blending into the hills around them
     for (const r of rects) if (!r.inside && r.oy === GY - 2) { const o = outside(x, z, r, 3); if (o < 10) h = Math.round(GY + (h - GY) * smooth(0, 10, o)); }
     { const o = Math.hypot(Math.max(0, cx - 42), Math.max(0, 86 - cz, cz - 130)) + Math.max(0, -cx); if (o < 12) h = Math.round(GY + (h - GY) * smooth(0, 12, o)); }
     { const o = Math.hypot(Math.max(0, 128 - cx, cx - 300), Math.max(0, 148 - cz, cz - 196)); if (o < 12 && bay < 0.6) h = Math.round(GY + (h - GY) * smooth(0, 12, o)); }
     { const o = Math.hypot(x - TOWN[0], z - TOWN[1]) - 18; if (o < 10) h = Math.round(GY + (h - GY) * smooth(0, 10, o)); }
     heightMap[z * W + x] = h;
-    biome[z * W + x] = south > 0.5 ? 5 : east > 0.5 ? (z < 150 ? 2 : z > 412 ? 4 : 3) : north > 0.5 ? 1 : 0;
+    biome[z * W + x] = deep > 0.5 ? 7 : range > 0.5 ? 6 : south > 0.5 ? 5 : east > 0.5 ? (z < 150 ? 2 : z > 412 ? 4 : 3) : north > 0.5 ? 1 : 0;
   }
   // the courses set in the mountain need it to be solid above them
   for (const r of rects) if (r.inside === 'mountain') for (let z = r.oz - 3; z < r.oz + r.d + 3; z++) for (let x = r.ox - 2; x < r.ox + r.w + 2; x++) heightMap[z * W + x] = Math.max(heightMap[z * W + x], r.oy + r.h + 4);
+  for (let cz = 0; cz < store.NZ; cz++) for (let cx = 0; cx < store.NX; cx++) {
+    let lo = 1e9, hi = 0; for (let z = cz * 16; z < Math.min(D, cz * 16 + 16); z++) for (let x = cx * 16; x < Math.min(W, cx * 16 + 16); x++) { const h = heightMap[z * W + x]; lo = Math.min(lo, h); hi = Math.max(hi, h); }
+    store.init(cx, cz, Math.min(lo, SEA) - 8, Math.max(hi, SEA) + 24 < GY + 66 ? GY + 66 : Math.max(hi, SEA) + 24);
+  }
   for (let z = 0; z < D; z++) for (let x = 0; x < W; x++) {
-    const h = heightMap[z * W + x], b = biome[z * W + x], low = h <= SEA + 1;
-    for (let y = 0; y < h; y++) {
+    const h = heightMap[z * W + x], b = biome[z * W + x], low = h <= SEA || (h === SEA + 1 && (heightMap[z * W + Math.min(W - 1, x + 2)] <= SEA || heightMap[z * W + Math.max(0, x - 2)] <= SEA || heightMap[Math.min(D - 1, z + 2) * W + x] <= SEA || heightMap[Math.max(0, z - 2) * W + x] <= SEA));
+    for (let y = store.col(x, z).y0; y < h; y++) {
       let t = y < h - 4 ? T.STONE : T.GROUND;
       if (b === 3) t = y >= h - 3 ? T.SAND : T.SANDSTONE;
       else if (b === 4) t = T.BASALT;
       else if (b === 1) t = y === h - 1 ? T.SNOW : y >= h - 3 ? T.GROUND : T.STONE;
-      else if (low || b === 5) t = y >= h - 3 ? T.SAND : T.STONE;
-      else if (h > 36 && y < h - 1) t = T.STONE;
-      if (y >= 42 && y === h - 1 && b !== 4) t = T.SNOW;
+      else if (low || b === 5 || b === 7) t = y >= h - 3 ? T.SAND : T.STONE;
+      else if (b === 6) t = y === h - 1 ? (h > GY + 40 ? T.SNOW : T.GROUND) : y >= h - 2 ? T.GROUND : T.STONE;
+      else if (h > Y0 + 36 && y < h - 1) t = T.STONE;
+      if (y >= Y0 + 42 && y === h - 1 && b !== 4) t = T.SNOW;
       set(x, y, z, t);
     }
     for (let y = h; y <= SEA; y++) set(x, y, z, T.WATER);
@@ -113,8 +148,8 @@ export function buildWorld() {
 
   // ---------------------------------------------------------------- the castle and its lava moat, before the fortress goes in
   { const r = rects.find((q) => q.id === '1-F'), x0 = r.ox - 4, x1 = r.ox + r.w + 3, z0 = r.oz - 4, z1 = r.oz + r.d + 3;
-    for (let z = z0 - 5; z <= z1 + 5; z++) for (let x = x0 - 5; x <= x1 + 5; x++) { if (x >= x0 && x <= x1 && z >= z0 && z <= z1) continue; fill(x, 1, z, x, GY - 2, z, T.STONE); set(x, GY - 1, z, T.LAVA); fill(x, GY, z, x, H - 1, z, T.EMPTY); }
-    fill(x0, 1, z0, x1, r.oy + r.h + 3, z1, T.STONE);
+    for (let z = z0 - 5; z <= z1 + 5; z++) for (let x = x0 - 5; x <= x1 + 5; x++) { if (x >= x0 && x <= x1 && z >= z0 && z <= z1) continue; fill(x, Y0 + 1, z, x, GY - 2, z, T.STONE); set(x, GY - 1, z, T.LAVA); fill(x, GY, z, x, H - 1, z, T.EMPTY); }
+    fill(x0, Y0 + 1, z0, x1, r.oy + r.h + 3, z1, T.STONE);
     for (let x = x0; x <= x1; x += 2) { set(x, r.oy + r.h + 4, z0, T.STONE); set(x, r.oy + r.h + 4, z1, T.STONE); }
     for (let z = z0; z <= z1; z += 2) { set(x0, r.oy + r.h + 4, z, T.STONE); set(x1, r.oy + r.h + 4, z, T.STONE); }
     fill(x0 - 6, GY - 1, r.oz + 3, x0 - 1, GY - 1, r.oz + r.d - 4, T.PLANK);
@@ -129,9 +164,9 @@ export function buildWorld() {
     const L = LEVELS[r.id];
     for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) {
       const wx = x + r.ox, wz = z + r.oz;
-      for (let y = 0; y < L.h; y++) { let t = L.tiles[(y * L.d + z) * L.w + x]; if (r.id === '1-W' && t === T.GROUND) t = T.SAND; if (t === T.EMPTY && !r.inside && y + r.oy <= SEA && r.id !== '1-W') t = get(wx, y + r.oy, wz) === T.WATER ? T.WATER : T.EMPTY; set(wx, y + r.oy, wz, t); }
+      for (let y = 0; y < L.h; y++) { let t = L.tiles[(y * L.d + z) * L.w + x]; if (t === T.CANNON) W0.cannons.push({ x: wx, y: y + r.oy, z: wz, t: 1 + ((wx * 7 + wz * 3) % 10) / 4 }); if (r.id === '1-W' && t === T.GROUND) t = T.SAND; if (t === T.EMPTY && !r.inside && y + r.oy <= SEA && r.id !== '1-W') t = get(wx, y + r.oy, wz) === T.WATER ? T.WATER : T.EMPTY; set(wx, y + r.oy, wz, t); }
       const bottom = L.tiles[(0 * L.d + z) * L.w + x];
-      if (r.oy > 0 && r.oy <= GY) for (let y = 0; y < r.oy; y++) set(wx, y, wz, bottom === T.EMPTY ? T.EMPTY : r.id === '1-W' ? T.SAND : T.STONE);
+      if (r.oy > 0 && r.oy <= GY) for (let y = Y0 - 12; y < r.oy; y++) set(wx, y, wz, bottom === T.EMPTY ? T.EMPTY : r.id === '1-W' ? T.SAND : T.STONE);
       if (!r.inside && r.oy <= GY) for (let y = r.oy + L.h; y < H; y++) set(wx, y, wz, T.EMPTY);
     }
     for (const e of L.ents) W0.ents.push({ ...e, x: e.x + r.ox, y: e.y + r.oy, z: e.z + r.oz, region: r.id });
@@ -142,7 +177,7 @@ export function buildWorld() {
     W0.regions.push({ id: r.id, name: r.region, theme: L.theme, box: [r.ox - 3, r.oy - 3, r.oz - 3, r.ox + L.w + 3, r.oy + L.h + 4, r.oz + L.d + 3] });
     reserve(r.ox - 6, r.oz - 6, r.ox + L.w + 6, r.oz + L.d + 6);
   }
-  const surf = (x, z) => { for (let y = H - 1; y >= 0; y--) { const t = get(x, y, z); if (t !== T.EMPTY && t !== T.WATER && t !== T.COIN && t !== T.HIDDEN) return y + 1; } return 0; };
+  const surf = (x, z) => { if (x < 0 || z < 0 || x >= W || z >= D) return 0; for (let y = store.col(x, z).y1 - 1; y >= 0; y--) { const t = get(x, y, z); if (t !== T.EMPTY && t !== T.WATER && t !== T.COIN && t !== T.HIDDEN) return y + 1; } return 0; };
 
   // ---------------------------------------------------------------- pipes, warps and signs
   const pipe = (x, z, base, hgt, warp) => { fill(x, base, z, x + 1, base + hgt - 2, z + 1, T.PIPE); fill(x, base + hgt - 1, z, x + 1, base + hgt - 1, z + 1, T.PIPETOP); const p = { x, z, base, hgt, warp }; W0.pipes.push(p); if (warp) W0.warps.push(p); reserve(x - 3, z - 3, x + 4, z + 4); return p; };
@@ -237,7 +272,7 @@ export function buildWorld() {
   // ---------------------------------------------------------------- the heartland's secrets
   hidden('village-sky', 'core', 26 + OX, GY + 4, 110 + OZ);
   hint(30 + OX, 112 + OZ, '黑桃廣場的正上方，空氣裡藏著東西。跳起來頂頂看。', 'Right above the spade square, the air hides something. Jump and bump it.');
-  bonus('heaven', 'core', [16 + OX, 90 + OZ + 1], [70, 66, 36], true);
+  bonus('heaven', 'core', [16 + OX, 90 + OZ + 1], [70, Y0 + 66, 36], true);
   hint(12 + OX, 92 + OZ, '小屋後面那根沒有名牌的水管，通往雲端的寶庫。', 'The unmarked pipe behind the house leads to a vault in the clouds.');
   { const cx = 100 + OX, cz = 150 + OZ; for (const [dx, dz] of [[-5, -3], [5, -3], [0, 5]]) tree(cx + dx, cz + dz); xmark('three-trees', 'core', cx, cz);
     hint(cx - 9, cz, '三棵樹圍成的三角形中央，用力蹬地。', 'Where three trees make a triangle, pound the ground in the middle.'); reserve(cx - 10, cz - 8, cx + 8, cz + 8); }
@@ -248,7 +283,7 @@ export function buildWorld() {
   { const c = COURSES['1-4']; const pts = [[0, 0], [20, -8], [40, 0], [60, 14], [80, 18], [100, 14], [120, 0], [128, 16]].map(([dx, dz]) => { const x = c.ox + dx, z = c.oz + dz + (dz < 0 ? -2 : 14); return [x, surf(x, z) + 1, z]; }); reds('grove-reds', 'core', pts, [c.ox + 60, surf(c.ox + 60, c.oz - 6), c.oz - 6]); }
   { const a = COURSES['1-A'], mx = a.ox + 33, mz = a.oz + 1; fill(mx, a.oy + 9, mz, mx, a.oy + 19, mz, T.LOG); fill(mx - 1, a.oy + 20, mz - 1, mx + 1, a.oy + 20, mz + 1, T.PLANK); star('airship-mast', 'core', mx, a.oy + 21, mz); }
   { const x = 120 + OX, z = 196 + OZ; xmark('beach-x', 'core', x, z); hint(x - 6, z - 6, '沙灘上的 X，代表寶藏。', 'X marks the spot on the beach.'); }
-  { const cx = 150 + OX, cz = 120 + OZ, cy = 68; fill(cx - 8, cy - 1, cz - 8, cx + 8, cy - 1, cz + 8, T.CLOUD); fill(cx - 3, cy, cz - 3, cx + 3, cy + 5, cz + 3, T.WALL); fill(cx - 2, cy, cz - 2, cx + 2, cy + 4, cz + 2, T.EMPTY); fill(cx, cy, cz + 3, cx, cy + 1, cz + 3, T.EMPTY); for (let k = 0; k < 3; k++) fill(cx - 4 + k, cy + 6 + k, cz - 4 + k, cx + 4 - k, cy + 6 + k, cz + 4 - k, T.CAPGOLD);
+  { const cx = 150 + OX, cz = 120 + OZ, cy = Y0 + 68; fill(cx - 8, cy - 1, cz - 8, cx + 8, cy - 1, cz + 8, T.CLOUD); fill(cx - 3, cy, cz - 3, cx + 3, cy + 5, cz + 3, T.WALL); fill(cx - 2, cy, cz - 2, cx + 2, cy + 4, cz + 2, T.EMPTY); fill(cx, cy, cz + 3, cx, cy + 1, cz + 3, T.EMPTY); for (let k = 0; k < 3; k++) fill(cx - 4 + k, cy + 6 + k, cz - 4 + k, cx + 4 - k, cy + 6 + k, cz + 4 - k, T.CAPGOLD);
     star('cloud-castle', 'core', cx, cy + 1, cz); const s6 = COURSES['1-6']; stair([s6.ox + 132, s6.oy + 2, s6.oz + 5], [cx, cy, cz + 7], 'sky-castle'); }
 
   // ---------------------------------------------------------------- Frostpeak Snowfields
@@ -284,7 +319,7 @@ export function buildWorld() {
     for (let dz = -8; dz <= 8; dz++) for (let dx = -8; dx <= 8; dx++) if (Math.hypot(dx, dz) <= 8.3) set(hx + dx, hg + 15, hz + dz, T.ROOF);
     star('hollow-stem', 'forest', hx, hg + 1, hz - 1); hint(hx + 6, hz + 8, '最粗的那朵菇，腳下的磚門裂開了。', 'The fattest mushroom of all has a cracked brick door at its foot.'); reserve(hx - 9, hz - 9, hx + 9, hz + 10);
     const xx = 520, xz = 40; xmark('forest-x', 'forest', xx, xz); hint(xx - 4, xz + 4, '森林的東北角，有個奇怪的記號。', 'In the north-east corner of the forest, a strange mark.');
-    bonus('forest-vault', 'forest', [390, 60], [500, 4, 20]);
+    bonus('forest-vault', 'forest', [390, 60], [500, Y0 + 4, 20]);
     W0.places.forest = [380, 80]; }
 
   // ---------------------------------------------------------------- Sunsand Desert
@@ -298,9 +333,9 @@ export function buildWorld() {
     const [tx, tz] = TOWN; house(tx - 12, tz - 10, 'house3', T.CAPGOLD, T.SANDSTONE); house(tx + 4, tz - 10, null, T.ROOF, T.SANDSTONE); house(tx - 4, tz + 6, null, T.CAPGOLD, T.SANDSTONE);
     hidden('town-sky', 'desert', tx + 7, GY + 12, tz - 7); hint(tx - 2, tz - 2, '鎮上最高的屋頂再往上，還有東西。', 'Higher still than the town’s tallest roof, there is something.');
     W0.places.desert = [tx, tz + 2];
-    const [ox, oz] = OASIS; for (let z = oz - 13; z <= oz + 13; z++) for (let x = ox - 13; x <= ox + 13; x++) { const d = Math.hypot(x - ox, z - oz); if (d < 11) { fill(x, 8, z, x, 10, z, T.SAND); fill(x, 11, z, x, SEA, z, T.WATER); fill(x, SEA + 1, z, x, H - 1, z, T.EMPTY); } }
+    const [ox, oz] = OASIS; for (let z = oz - 13; z <= oz + 13; z++) for (let x = ox - 13; x <= ox + 13; x++) { const d = Math.hypot(x - ox, z - oz); if (d < 11) { fill(x, Y0 + 8, z, x, Y0 + 10, z, T.SAND); fill(x, Y0 + 11, z, x, SEA, z, T.WATER); fill(x, SEA + 1, z, x, H - 1, z, T.EMPTY); } }
     for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; tree(Math.round(ox + Math.cos(a) * 13), Math.round(oz + Math.sin(a) * 13), 'palm'); }
-    star('oasis-floor', 'desert', ox, 12, oz); reserve(ox - 15, oz - 15, ox + 15, oz + 15);
+    star('oasis-floor', 'desert', ox, Y0 + 12, oz); reserve(ox - 15, oz - 15, ox + 15, oz + 15);
     const pts = []; for (let i = 0; i < 8; i++) { const x = 360 + i * 24, z = 380 - (i % 3) * 10; pts.push([x, surf(x, z) + 1, z]); } reds('dune-reds', 'desert', pts, [440, surf(440, 392), 392]);
     const sx = 540, sz = 300, sg = surf(sx, sz); fill(sx - 3, sg, sz - 3, sx + 3, sg + 5, sz + 3, T.STONE); for (const [dx, dy] of [[-1, 3], [1, 3]]) set(sx + dx, sg + dy, sz + 3, T.EMPTY); fill(sx - 1, sg + 1, sz + 3, sx + 1, sg + 1, sz + 3, T.EMPTY);
     xmark('skull-x', 'desert', sx, sz + 6); hint(sx - 5, sz + 8, '骷髏岩看著的地方。', 'Where the skull rock is looking.'); reserve(sx - 6, sz - 5, sx + 6, sz + 10);
@@ -329,46 +364,108 @@ export function buildWorld() {
     for (let y = 0; y < 20; y++) fill(lx - 1, lg + y, lz - 1, lx + 1, lg + y, lz + 1, Math.floor(y / 3) % 2 ? T.ROOF : T.WALL);
     for (let k = 0; k < 40; k++) { const a = k * (Math.PI * 2 / 12); set(Math.round(lx + Math.cos(a) * 3), lg + Math.floor(k / 2), Math.round(lz + Math.sin(a) * 3), T.HARD); }
     star('lighthouse', 'isles', lx, lg + 22, lz); W0.places.isles = [lx + 6, lz + 8];
-    const sx = 236, sz = 500; fill(sx, 7, sz, sx + 13, 9, sz + 4, T.PLANK); fill(sx + 1, 8, sz + 1, sx + 12, 9, sz + 3, T.EMPTY); fill(sx + 1, 8, sz + 1, sx + 12, 9, sz + 3, T.WATER); fill(sx + 6, 10, sz + 2, sx + 6, 15, sz + 2, T.LOG); star('shipwreck', 'isles', sx + 9, 8, sz + 2);
-    const tx2 = 128, tz2 = 470; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; fill(Math.round(tx2 + Math.cos(a) * 5), 8, Math.round(tz2 + Math.sin(a) * 5), Math.round(tx2 + Math.cos(a) * 5), 13, Math.round(tz2 + Math.sin(a) * 5), T.STONE); } star('sunken-ring', 'isles', tx2, 10, tz2);
-    for (let i = 0; i < 10; i++) W0.ents.push({ t: 'f', x: 120 + i * 18, y: 11, z: 480 + (i % 3) * 20, region: 'isles' });
+    const sx = 236, sz = 500; fill(sx, Y0 + 7, sz, sx + 13, Y0 + 9, sz + 4, T.PLANK); fill(sx + 1, Y0 + 8, sz + 1, sx + 12, Y0 + 9, sz + 3, T.WATER); fill(sx + 6, Y0 + 10, sz + 2, sx + 6, Y0 + 15, sz + 2, T.LOG); star('shipwreck', 'isles', sx + 9, Y0 + 8, sz + 2);
+    const tx2 = 128, tz2 = 470; for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; fill(Math.round(tx2 + Math.cos(a) * 5), Y0 + 8, Math.round(tz2 + Math.sin(a) * 5), Math.round(tx2 + Math.cos(a) * 5), Y0 + 13, Math.round(tz2 + Math.sin(a) * 5), T.STONE); } star('sunken-ring', 'isles', tx2, Y0 + 10, tz2);
+    for (let i = 0; i < 10; i++) W0.ents.push({ t: 'f', x: 120 + i * 18, y: Y0 + 11, z: 480 + (i % 3) * 20, region: 'isles' });
     const [p3x, p3z] = ISLES[3], top = tree(p3x, p3z, 'palm'); hidden('palm-sky', 'isles', p3x + 1, top + 3, p3z); hint(p3x - 4, p3z + 4, '最大棵的椰子樹，樹頂再上面。', 'Above the top of the tallest palm.');
     const [b5x, b5z] = ISLES[5]; xmark('sandbar-x', 'isles', b5x, b5z); hint(b5x + 2, b5z - 3, '最小的沙洲上，蹬一下。', 'Pound the smallest sandbar.');
-    bonus('sunken-vault', 'isles', [ISLES[2][0], ISLES[2][1]], [20, 3, 540]);
+    bonus('sunken-vault', 'isles', [ISLES[2][0], ISLES[2][1]], [24, Y0 + 3, 536]);
     for (const [x, z, r] of ISLES) { reserve(x - 2, z - 2, x + 2, z + 2); for (let k = 0; k < 2; k++) { const a = rnd() * 6.3, tx = Math.round(x + Math.cos(a) * r * 0.5), tz = Math.round(z + Math.sin(a) * r * 0.5); if (!reserved[tz * W + tx] && surf(tx, tz) > SEA + 1) tree(tx, tz, 'palm'); } }
     const pts = []; ISLES.forEach(([x, z, r], i) => { pts.push([x + 3, surf(x + 3, z) + 1, z]); if (i < 2) pts.push([x - 3, surf(x - 3, z + 3) + 1, z + 3]); }); reds('isle-reds', 'isles', pts.slice(0, 8), [lx + 5, surf(lx + 5, lz + 5), lz + 5]);
+  }
+  // ---------------------------------------------------------------- Skyreach Peak: a trail winds up the giant mountain to a shrine at the top
+  { const [px, pz] = PEAK, rAt = (y) => PEAK_R * (1 - Math.pow(Math.max(0, Math.min(1, (y - GY) / PEAK_H)), 1 / 1.5));
+    let th = Math.PI, y = GY + 4, s = 0, lastRest = 0, n = 0; const trail = [];
+    while (y < GY + PEAK_H - 6) {
+      const r = Math.max(7, rAt(y) - 1.5), x = Math.round(px + Math.cos(th) * r), z = Math.round(pz + Math.sin(th) * r / 0.9), yy = Math.round(y);
+      for (let k = -1; k <= 1; k++) { const tx = Math.round(px + Math.cos(th) * (r + k)), tz = Math.round(pz + Math.sin(th) * (r + k) / 0.9); fill(tx, yy - 3, tz, tx, yy - 1, tz, yy > GY + 40 ? T.SNOW : T.GROUND); fill(tx, yy, tz, tx, yy + 4, tz, T.EMPTY); }
+      if (s - lastRest > 70) { lastRest = s; n++; fill(x - 2, yy - 1, z - 2, x + 2, yy - 1, z + 2, T.STONE); fill(x - 2, yy, z - 2, x + 2, yy + 4, z + 2, T.EMPTY); for (let k = 0; k < 4; k++) set(x - 1 + k % 2 * 2, yy + 1, z - 1 + Math.floor(k / 2) * 2, T.COIN); W0.checks.push({ x: x - 2, y: yy, z, z0: z - 3, z1: z + 3, region: 'peak' }); trail.push([x, yy, z]); if (n % 2) W0.ents.push({ t: n % 4 === 1 ? 's' : 'b', x: x + 3, y: yy + (n % 4 === 1 ? 0 : 3), z, region: 'peak', skin: 'snow' }); }
+      const step = 0.5; th += step / r; y += step * 0.5; s += step;
+    }
+    // the summit: a little shrine with a golden roof, a star, and a pipe home
+    const top = GY + PEAK_H; fill(px - 5, top - 3, pz - 5, px + 5, top - 1, pz + 5, T.STONE); fill(px - 5, top, pz - 5, px + 5, top + 8, pz + 5, T.EMPTY);
+    { const ly = Math.round(y); for (let yy = ly; yy < top; yy++) { const k = (yy - ly) * 0.9; const sx = Math.round(px + Math.cos(th + k * 0.35) * 6), sz = Math.round(pz + Math.sin(th + k * 0.35) * 6); fill(sx - 1, yy - 1, sz - 1, sx + 1, yy - 1, sz + 1, T.STONE); fill(sx - 1, yy, sz - 1, sx + 1, yy + 3, sz + 1, T.EMPTY); } }
+    for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) fill(px + dx, top, pz + dz, px + dx, top + 3, pz + dz, T.WALL);
+    for (let k = 0; k < 3; k++) fill(px - 4 + k, top + 4 + k, pz - 4 + k, px + 4 - k, top + 4 + k, pz + 4 - k, T.CAPGOLD);
+    star('summit', 'peak', px, top + 1, pz); hidden('summit-sky', 'peak', px, top + 10, pz); hint(px - 4, pz + 4, '山頂的屋頂再往上，雲裡藏著最後的東西。', 'Above the shrine’s roof, in the clouds, the last thing is hidden.');
+    W0.checks.push({ x: px - 3, y: top, z: pz, z0: pz - 5, z1: pz + 5, region: 'peak', summit: true });
+    pipe(px + 1, pz - 4, top, 2, { kind: 'secret', to: [W0.start[0], W0.start[1] + 2, W0.start[2]] });
+    W0.signs.push({ x: px + 2, y: top + 2.6, z: pz - 3, text: B('回蘑菇村', 'To the village') });
+    // red coins on the rest stops, an X on one of them, and a star on a ledge only the brave fly to
+    const pts = trail.filter((_, i) => i % 2 === 0).slice(0, 8).map(([x, yy, z]) => [x + 1, yy, z + 1]); if (pts.length === 8) reds('trail-reds', 'peak', pts, [trail[9][0], trail[9][1], trail[9][2]]);
+    const xr = trail[3]; if (xr) { set(xr[0] - 1, xr[1] - 1, xr[2] - 1, T.XMARK); secret('rest-x', 'peak', xr[0] - 1, xr[1] - 1, xr[2] - 1, 'pound'); hint(xr[0] + 2, xr[2] + 2, '第四個休息站，石頭地上有記號。', 'At the fourth rest stop, a mark in the stone floor.'); }
+    const mid = trail[Math.floor(trail.length / 2)]; if (mid) { const ox = Math.round(px + (mid[0] - px) * 1.25), oz = Math.round(pz + (mid[2] - pz) * 1.25); fill(ox - 1, mid[1] + 8, oz - 1, ox + 1, mid[1] + 8, oz + 1, T.CLOUD); star('cliff-cloud', 'peak', ox, mid[1] + 9, oz); }
+    reserve(px - PEAK_R, pz - PEAK_R, px + PEAK_R, pz + PEAK_R);
+    W0.places.peak = [Math.round(px + Math.cos(Math.PI) * (PEAK_R + 4)), pz];
+    W0.regions.push({ id: 'summit', name: B('天梯峰頂', 'Skyreach Summit'), theme: 'sky', sky: 'snow', box: [px - 12, top - 4, pz - 12, px + 12, H, pz + 12] });
+  }
+
+  // ---------------------------------------------------------------- the Deep Trench: a dock on the open sea, and far below it a sunken temple
+  { const c = COURSES['1-D'], cx = c.ox + 20, cz = c.oz + 20, yb = c.oy + 2;
+    // open the trench into a great round shaft of water
+    for (let z = cz - 22; z <= cz + 22; z++) for (let x = cx - 22; x <= cx + 22; x++) { const r = Math.hypot(x - cx, z - cz); if (r < 18) { fill(x, yb - 2, z, x, yb - 1, z, T.SAND); fill(x, yb, z, x, SEA, z, T.WATER); } else if (r < 21) { const top = Math.max(surf(x, z), yb); fill(x, yb - 2, z, x, Math.min(top, SEA - 12), z, T.STONE); } }
+    // the dock at the surface, with a frog suit to try, coins and two pipes
+    fill(cx - 7, SEA, cz - 22, cx + 7, SEA, cz - 13, T.PLANK); fill(cx - 7, SEA + 1, cz - 22, cx + 7, SEA + 6, cz - 13, T.EMPTY);
+    for (const [dx, dz] of [[-7, -22], [7, -22], [-7, -13], [7, -13]]) fill(cx + dx, Y0 - 50, cz + dz, cx + dx, SEA - 1, cz + dz, T.LOG);
+    set(cx - 2, GY + 3, cz - 17, T.QFROG); set(cx - 1, GY + 3, cz - 17, T.BRICK); set(cx, GY + 3, cz - 17, T.QCOIN);
+    W0.checks.push({ x: cx - 6, y: GY, z: cz - 17, z0: cz - 22, z1: cz - 13, region: '1-D', start: true });
+    pipe(cx - 6, cz - 21, GY, 2, { kind: 'home', region: '1-D' }); W0.signs.push({ x: cx - 5, y: GY + 2.6, z: cz - 20, text: c.region, id: '1-D' });
+    W0.places.abyss = [cx + 4, cz - 21];
+    // coral ledges spiralling down the shaft, rings of coins in the water, fish everywhere
+    const corals = [T.ROOF, T.CAPBLUE, T.CAPGOLD]; let k = 0;
+    for (let y = SEA - 8; y > yb + 6; y -= 7, k++) {
+      const a = k * 1.25, lx = Math.round(cx + Math.cos(a) * 12), lz = Math.round(cz + Math.sin(a) * 12);
+      fill(lx - 2, y - 1, lz - 2, lx + 2, y - 1, lz + 2, T.STONE); for (let i = 0; i < 4; i++) set(lx - 2 + i, y, lz + 2, corals[(i + k) % 3]);
+      for (let i = 0; i < 8; i++) { const b = i / 8 * Math.PI * 2; set(Math.round(cx + Math.cos(a + 0.6) * 7 + Math.cos(b) * 2), y + 2, Math.round(cz + Math.sin(a + 0.6) * 7 + Math.sin(b) * 2), T.COIN); }
+      W0.ents.push({ t: 'f', x: cx + Math.round(Math.cos(a + 2) * 8), y: y + 1, z: cz + Math.round(Math.sin(a + 2) * 8), region: '1-D' }, { t: 'f', x: cx + Math.round(Math.cos(a - 2) * 6), y: y - 3, z: cz + Math.round(Math.sin(a - 2) * 6), region: '1-D' });
+      if (k === 7) W0.checks.push({ x: lx - 2, y, z: lz, z0: lz - 3, z1: lz + 3, region: '1-D' });
+    }
+    // the temple on the bottom: pillars, a roof, the finish line and a pipe home
+    fill(cx - 8, yb - 1, cz - 6, cx + 8, yb - 1, cz + 6, T.STONE);
+    for (let x = cx - 8; x <= cx + 8; x += 4) for (const z of [cz - 6, cz + 6]) fill(x, yb, z, x, yb + 7, z, T.STONE);
+    for (const z of [cz - 6, cz + 6]) { fill(cx - 8, yb + 8, z, cx + 8, yb + 8, z, T.STONE); fill(cx - 8, yb + 9, z, cx + 8, yb + 9, z, T.CAPGOLD); }
+    W0.goals.push({ x: cx + 2, y: yb + 0.8, z: cz, w: 1, h: 1, d: 1, z0: cz - 5, z1: cz + 6, region: '1-D' });
+    pipe(cx + 5, cz - 4, yb, 2, { kind: 'home', region: '1-D', end: true });
+    star('temple-floor', 'abyss', cx - 6, yb, cz + 4);
+    W0.regions.push({ id: '1-D', name: c.region, theme: 'water', box: [cx - 22, yb - 4, cz - 24, cx + 22, SEA + 10, cz + 22] });
+    reserve(cx - 24, cz - 24, cx + 24, cz + 24);
+    // out on the abyssal sea floor: a great sunken ship and a hidden block beside it, red coins on the sand
+    const wx = 600, wz = 690, wy = surf(wx, wz); fill(wx, wy, wz, wx + 24, wy + 4, wz + 7, T.PLANK); fill(wx + 1, wy + 1, wz + 1, wx + 23, wy + 3, wz + 6, T.WATER); fill(wx + 15, wy + 4, wz + 2, wx + 21, wy + 4, wz + 5, T.WATER); fill(wx + 12, wy + 5, wz + 3, wx + 12, wy + 20, wz + 3, T.LOG);
+    star('deep-wreck', 'abyss', wx + 18, wy + 1, wz + 3); hidden('wreck-block', 'abyss', wx + 6, wy + 8, wz + 3); reserve(wx - 2, wz - 2, wx + 26, wz + 10);
+    const pts = []; for (let i = 0; i < 8; i++) { const x = 200 + i * 40, z = 650 + (i % 2) * 30, y = surf(x, z); pts.push([x, y + 1, z]); } reds('abyss-reds', 'abyss', pts, [360, surf(360, 680) + 1, 680]);
   }
   for (const id of LAND_ORDER) { const [x, z] = W0.places[id], b = surf(x, z); clearAbove(x, z, x + 1, z + 1, b); const under = get(x, b - 1, z); fill(x - 1, b - 1, z - 1, x + 2, b - 1, z + 2, under === T.WATER || under === T.EMPTY ? T.SAND : under); pipe(x, z, b, 2, { kind: 'home', region: id }); W0.signs.push({ x: x + 1, y: b + 2.6, z: z + 1, text: LANDS[id].name, id }); W0.checks.push({ x: x - 1, y: b, z: z + 3, z0: z - 4, z1: z + 6, region: id, start: true }); }
 
   // ---------------------------------------------------------------- trees, cacti, coins and wandering baddies across the open land
   const bio = (x, z) => BIOME[biome[z * W + x]];
-  for (let i = 0; i < 2600; i++) {
+  for (let i = 0; i < 5200; i++) {
     const x = 8 + Math.floor(rnd() * (W - 16)), z = 8 + Math.floor(rnd() * (D - 16)), g = surf(x, z), b = bio(x, z);
-    if (reserved[z * W + x] || g <= SEA + 1 || g > 44) continue;
+    if (reserved[z * W + x] || g <= SEA + 1 || g > Y0 + 44) continue;
     const top = get(x, g - 1, z);
     if (b === 'desert') { if (top === T.SAND && rnd() < 0.35) { const hgt = 2 + Math.floor(rnd() * 3); fill(x, g, z, x, g + hgt - 1, z, T.CACTUS); if (rnd() < 0.6) { set(x + 1, g + 1, z, T.CACTUS); set(x + 1, g + 2, z, T.CACTUS); } } continue; }
-    if (b === 'volcano' || b === 'isles') continue;
+    if (b === 'volcano' || b === 'isles' || b === 'abyss') continue;
+    if (b === 'peak') { if (top === T.GROUND && g < GY + 60) tree(x, z, 'pine', g); continue; }
     if (b === 'snow') { if (top === T.SNOW || top === T.GROUND) tree(x, z, 'pine', g); continue; }
     if (top !== T.GROUND) continue;
     if (b === 'forest' && rnd() < 0.4) continue;
     tree(x, z, 'oak', g);
   }
-  const KINDS = { core: ['g', 'g', 'k', 'w', 'g'], snow: ['g', 's', 'k', 'w', 's'], forest: ['g', 'k', 'w', 'g', 'k'], desert: ['c', 'c', 'g', 's', 'k'], volcano: ['s', 'g', 'b', 's', 'k'], isles: ['k', 'g'] };
-  for (let i = 0; i < 520; i++) {
+  const KINDS = { peak: ['g', 's', 'w', 'k', 'b'], abyss: ['k'], core: ['g', 'g', 'k', 'w', 'g'], snow: ['g', 's', 'k', 'w', 's'], forest: ['g', 'k', 'w', 'g', 'k'], desert: ['c', 'c', 'g', 's', 'k'], volcano: ['s', 'g', 'b', 's', 'k'], isles: ['k', 'g'] };
+  for (let i = 0; i < 1050; i++) {
     const x = 10 + Math.floor(rnd() * (W - 20)), z = 10 + Math.floor(rnd() * (D - 20)), g = surf(x, z), b = bio(x, z);
-    if (reserved[z * W + x] || g <= SEA + 1 || g > 42 || get(x, g, z) !== T.EMPTY) continue;
+    if (reserved[z * W + x] || g <= SEA + 1 || g > Y0 + 42 || get(x, g, z) !== T.EMPTY) continue;
     const ks = KINDS[b], t = ks[Math.floor(rnd() * ks.length)];
     W0.ents.push({ t, x, y: t === 'b' ? g + 4 : g, z, region: b, skin: b, roam: true });
   }
-  for (let i = 0; i < 200; i++) {
+  for (let i = 0; i < 420; i++) {
     const x = 10 + Math.floor(rnd() * (W - 20)), z = 10 + Math.floor(rnd() * (D - 20)), g = surf(x, z);
-    if (reserved[z * W + x] || g <= SEA || g > 40) continue;
+    if (reserved[z * W + x] || g <= SEA || g > Y0 + 40) continue;
     if (rnd() < 0.5) { for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2; set(Math.round(x + Math.cos(a) * 2), g + 2, Math.round(z + Math.sin(a) * 2), T.COIN); } }
     else { const q = [T.QCOIN, T.QCOIN, T.QLEAF, T.QFLOWER, T.Q1UP, T.QTANOOKI][Math.floor(rnd() * 6)]; set(x, g + 3, z, T.BRICK); set(x + 1, g + 3, z, q); set(x + 2, g + 3, z, T.BRICK); }
   }
   // the tallest tree in the heartland wears a star
   { let best = null; for (let z = OZ + 10; z < OZ + 180; z += 1) for (let x = OX + 10; x < OX + 250; x += 1) { const s = surf(x, z); if (get(x, s - 1, z) !== T.LEAVES) continue; if (!best || s > best[2]) best = [x, z, s]; } if (best) star('tall-tree', 'core', best[0], best[2] + 1, best[1]); }
-  W0.heightMap = heightMap; W0.biome = biome; W0.surf = surf;
+  W0.heightMap = heightMap; W0.biome = biome; W0.surf = surf; W0.seaY = SEA;
   return W0;
 }
 // once the fortress is beaten: the cloud stair to the airship

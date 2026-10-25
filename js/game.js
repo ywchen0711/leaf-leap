@@ -19,8 +19,8 @@ export const PH = { walk: 6, run: 9.5, prun: 12, accel: 32, airAccel: 18, fric: 
   swim: 3.6, frogSwim: 7.5, frogWalk: 6, stroke: 5.5, sink: 3, waterG: 10, statueTime: 4 };
 
 // the grid: index ((y * d) + z) * w + x; outside the sides is an invisible wall, below is a pit, above is open sky
-export const tileAt = (L, x, y, z) => (x < 0 || x >= L.w || z < 0 || z >= L.d ? T.HARD : y < 0 || y >= L.h ? T.EMPTY : L.tiles[(y * L.d + z) * L.w + x]);
-function setTile(G, x, y, z, t) { const L = G.L; if (x < 0 || x >= L.w || z < 0 || z >= L.d || y < 0 || y >= L.h) return; L.tiles[(y * L.d + z) * L.w + x] = t; G.ev.push({ t: 'tile', x, y, z }); }
+export const tileAt = (L, x, y, z) => (x < 0 || x >= L.w || z < 0 || z >= L.d ? T.HARD : y < 0 || y >= L.h ? T.EMPTY : L.get ? L.get(x, y, z) : L.tiles[(y * L.d + z) * L.w + x]);
+function setTile(G, x, y, z, t) { const L = G.L; if (x < 0 || x >= L.w || z < 0 || z >= L.d || y < 0 || y >= L.h) return; if (L.set) L.set(x, y, z, t); else L.tiles[(y * L.d + z) * L.w + x] = t; G.ev.push({ t: 'tile', x, y, z }); }
 const approach = (v, to, d) => (v < to ? Math.min(to, v + d) : Math.max(to, v - d));
 const overlap = (a, b) => a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y && a.z < b.z + b.d && a.z + a.d > b.z;
 const flatDist = (a, b) => Math.hypot(a.x + a.w / 2 - (b.x + b.w / 2), a.z + a.d / 2 - (b.z + b.d / 2));
@@ -52,14 +52,15 @@ export const inWater = (L, o) => tileAt(L, Math.floor(o.x + o.w / 2), Math.floor
 // ---------------------------------------------------------------- starting a level
 // def: { id, w, h, d, tiles, ents: [{ t, x, y, z }], start: [x, y, z], goal: [x, y, z] | null, check: [x, y, z] | null, theme }
 export function newRun(def, opts = {}) {
-  const L = { w: def.w, h: def.h, d: def.d, tiles: def.tiles.slice(), theme: def.theme };
+  const L = def.world ? def : { w: def.w, h: def.h, d: def.d, tiles: def.tiles.slice(), theme: def.theme };
   const at = opts.checkpoint && def.check ? def.check : def.start;
   const hero = { hero: true, x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, w: 0.7, d: 0.7, h: 0.9, vx: 0, vy: 0, vz: 0, face: Math.PI / 2, onGround: true, power: 0, inv: 0, pm: 0, flyT: 0, wag: 0, spin: 0,
     coyote: 0, buffer: 0, dead: false, deadT: 0, prevY: at[1], fireCd: 0, pound: 0, poundT: 0, statue: 0, statueCd: 0, swimming: false, pwing: !!opts.pwing };
   // the P-wing: a raccoon tail and a P-meter that never runs out, for one level
   setPower(hero, opts.pwing && !hasTail({ power: opts.power || 0 }) ? POWER.LEAF : opts.power || 0);
   const cannons = [];
-  for (let y = 0; y < L.h; y++) for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) if (L.tiles[(y * L.d + z) * L.w + x] === T.CANNON) cannons.push({ x, y, z, t: 1 + ((x * 7 + z * 3) % 10) / 4 });
+  if (def.world) cannons.push(...(def.cannons || []).map((c) => ({ ...c })));
+  else for (let y = 0; y < L.h; y++) for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) if (L.tiles[(y * L.d + z) * L.w + x] === T.CANNON) cannons.push({ x, y, z, t: 1 + ((x * 7 + z * 3) % 10) / 4 });
   const spawns = def.ents.filter((e) => ENEMY[e.t]);
   const G = { def, L, hero, enemies: spawns.map(makeEnemy), items: [], fire: [], shots: [], cannons, t: 0, coins: 0, lives: 0, cleared: null, checked: !!opts.checkpoint,
     god: !!opts.god, ev: [], goal: def.goal ? { x: def.goal[0], y: def.goal[1], z: def.goal[2], w: 1, h: 1, d: 1 } : null, bossDown: false,
@@ -227,7 +228,7 @@ function stepHero(G, inp, dt) {
   if (h.statue > 0) { h.statue -= dt; if (!inp.pound || h.statue <= 0 || h.power !== POWER.TANOOKI) { h.statue = 0; h.statueCd = 0.8; G.ev.push({ t: 'unstatue' }); } }
   const want = Math.min(1, Math.hypot(inp.mx || 0, inp.mz || 0)), pFull = h.pm >= 1;
   // the frog suit hops slowly on land but is the fastest swimmer
-  const max = (h.swimming ? (h.power === POWER.FROG ? PH.frogSwim : PH.swim) : h.power === POWER.FROG ? PH.frogWalk : inp.run ? (pFull ? PH.prun : PH.run) : PH.walk) * want;
+  const max = (h.swimming ? (h.power === POWER.FROG ? PH.frogSwim : PH.swim) : h.power === POWER.FROG ? PH.frogWalk : inp.run ? (pFull ? PH.prun : PH.run) : PH.walk) * want * (h.speedMul || 1);
   // steer the velocity towards where the stick points
   if (h.pound || h.statue > 0) { h.vx = h.vz = 0; }
   else {
@@ -254,7 +255,7 @@ function stepHero(G, inp, dt) {
   // jumping (a little forgiveness both before landing and after leaving a ledge)
   h.coyote = h.swimming ? 0 : h.onGround ? 0.09 : h.coyote - dt; h.buffer = h.swimming ? 0 : inp.jumpPressed ? 0.12 : h.buffer - dt;
   if (h.statue > 0 || h.swimming) { /* no jumping as a statue, and swimming is handled above */ }
-  else if (!h.pound && h.buffer > 0 && h.coyote > 0) { h.vy = PH.jump + speed * PH.jumpRun; h.onGround = false; h.coyote = 0; h.buffer = 0; G.ev.push({ t: 'jump' }); }
+  else if (!h.pound && h.buffer > 0 && h.coyote > 0) { h.vy = (PH.jump + speed * PH.jumpRun) * (h.jumpMul || 1); h.onGround = false; h.coyote = 0; h.buffer = 0; G.ev.push({ t: 'jump' }); }
   else if (!h.pound && inp.jumpPressed && !h.onGround && hasTail(h)) {
     // with the leaf: a full P-meter lets you fly; otherwise a wag of the tail slows the fall
     if (h.pm >= 1) { if (h.flyT <= 0) h.flyT = PH.flyTime; h.vy = PH.fly; G.ev.push({ t: 'fly' }); } else { h.wag = 0.32; G.ev.push({ t: 'wag' }); }
@@ -309,7 +310,7 @@ function stepHero(G, inp, dt) {
     if (t === T.COIN) { setTile(G, x, y, z, T.EMPTY); G.coins++; G.ev.push({ t: 'coin', x, y, z }); }
     else if (t === T.LAVA && h.y < y + 0.6) { if (!G.god) die(G); else { G.lava = true; h.vy = 16; } }
   }
-  if (h.y < -3) { if (G.god) G.fell = true; die(G); }
+  if (h.y < -3 || (G.world && h.y < G.def.killY && !h.swimming)) { if (G.god) G.fell = true; die(G); }
   // the checkpoint
   if (!G.world && !G.checked && G.def.check && h.x > G.def.check[0]) { G.checked = true; G.ev.push({ t: 'check' }); }
   if (G.world) { const hz = h.z + h.d / 2; for (const c of G.checks) if (h.x > c.x && h.x < c.x + 2.5 && hz >= c.z0 && hz <= c.z1 && Math.abs(h.y - c.y) < 4 && G.respawn !== c.at) { c.at = c.at || [c.x, c.y, c.z]; if (G.respawn !== c.at) { G.respawn = c.at; if (!c.start) G.ev.push({ t: 'check', region: c.region }); else G.ev.push({ t: 'arrive', region: c.region }); } } }

@@ -2,11 +2,11 @@
 // Leafy Land is a single island now: walk anywhere, climb the cloud stairs, take a warp pipe home to Mushroom Village,
 // and cross each course's finish line for its card. There is no world map any more; the map screen shows the island.
 import * as THREE from 'three';
-import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=6';
-import { LEVELS } from './levels.js?v=6';
-import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY } from './world.js?v=6';
-import { buildWorldView, worldMapImage, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=6';
-import { Sound } from './audio.js?v=6';
+import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=7';
+import { LEVELS } from './levels.js?v=7';
+import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY, SEA } from './world.js?v=7';
+import { buildWorldView, worldMapImage, makeHero, BROS, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=7';
+import { Sound } from './audio.js?v=7';
 
 const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------- language
@@ -19,8 +19,8 @@ const N = (pair) => pair[EN() ? 1 : 0];
 
 // ---------------------------------------------------------------- the save (an old world-map save carries over)
 const KEY = 'leafleap.save';
-const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {}, secrets: {}, big: true });
-let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && (s.v === 1 || s.v === 2)) return { ...fresh(), ...s, v: 2, at: s.v === 2 && s.big ? s.at : null, big: true }; } catch (e) { /* none */ } return null; })();
+const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {}, secrets: {}, big: true, big2: true, bro: 'josh' });
+let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && (s.v === 1 || s.v === 2)) return { ...fresh(), ...s, v: 2, at: s.v === 2 && s.big2 ? s.at : null, big: true, big2: true, bro: s.bro === 'jasper' ? 'jasper' : 'josh' }; } catch (e) { /* none */ } return null; })();
 const hadSave = !!SAVE; if (!SAVE) SAVE = fresh();
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SAVE)); } catch (e) { /* private mode */ } };
 
@@ -30,7 +30,7 @@ const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(2, window.devicePixelRatio || 1)); renderer.outputColorSpace = THREE.SRGBColorSpace;
 const LOWFX = q.get('fx') === 'low';
 renderer.shadowMap.enabled = !LOWFX; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, 1, 0.3, 900);
+const scene = new THREE.Scene(), camera = new THREE.PerspectiveCamera(50, 1, 0.3, 1600);
 scene.add(new THREE.HemisphereLight('#ffffff', '#8a7a6a', 1.3));
 const sun = new THREE.DirectionalLight('#fff8e8', 1.55); scene.add(sun, sun.target);
 sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); Object.assign(sun.shadow.camera, { left: -28, right: 28, top: 28, bottom: -28, near: 1, far: 120 }); sun.shadow.bias = -0.0008;
@@ -38,9 +38,10 @@ function resize() { renderer.setSize(innerWidth, innerHeight, false); camera.asp
 addEventListener('resize', resize); resize();
 const sound = new Sound();
 const skyTex = (a, b) => { const c = document.createElement('canvas'); c.width = 2; c.height = 128; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, 2, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
-const SKIES = { grass: ['#4aa8ff', '#d0f0ff', '#cfeaff', 70, 230], map: ['#4aa8ff', '#d0f0ff', '#cfeaff', 70, 230], sky: ['#2a8aff', '#e8f6ff', '#e0f2ff', 80, 260], water: ['#3a9ae8', '#c8ecff', '#cfeaff', 70, 230], airship: ['#ff8a4a', '#ffe0a8', '#ffc890', 70, 240],
+const SKIES = { grass: ['#4aa8ff', '#d0f0ff', '#cfeaff', 90, 620], map: ['#4aa8ff', '#d0f0ff', '#cfeaff', 90, 620], sky: ['#2a8aff', '#e8f6ff', '#e0f2ff', 100, 680], water: ['#3a9ae8', '#c8ecff', '#cfeaff', 90, 560], airship: ['#ff8a4a', '#ffe0a8', '#ffc890', 90, 520],
+  deep: ['#0a2a5a', '#1a4a88', '#123a70', 4, 34], abyss: ['#020814', '#0a1a38', '#061020', 3, 24],
   cave: ['#05070d', '#141a30', '#0a0e1a', 14, 46], fort: ['#100e16', '#2a2030', '#1a1620', 16, 50], under: ['#1a5aa8', '#2a7ac8', '#2a7ac8', 6, 40],
-  snow: ['#8ab8e8', '#f4f8ff', '#e8f0fa', 60, 200], desert: ['#5aa8e8', '#fff0c8', '#f8e4b8', 70, 220], volcano: ['#5a2a2a', '#e8805a', '#a8604a', 40, 160] };
+  snow: ['#8ab8e8', '#f4f8ff', '#e8f0fa', 80, 560], desert: ['#5aa8e8', '#fff0c8', '#f8e4b8', 90, 560], volcano: ['#5a2a2a', '#e8805a', '#a8604a', 50, 280] };
 const skyCache = {};
 function setSky(k) { if (S.sky === k) return; S.sky = k; const s = SKIES[k]; scene.background = skyCache[k] || (skyCache[k] = skyTex(s[0], s[1])); scene.fog = new THREE.Fog(s[2], s[3], s[4]); }
 
@@ -48,7 +49,7 @@ function setSky(k) { if (S.sky === k) return; S.sky = k; const s = SKIES[k]; sce
 const W0 = buildWorld();
 const S = { mode: 'title', panel: null, G: null, V: null, deadT: 0, acc: 0, t: 0, shake: 0, region: null, sky: null, doorCd: 0, warpT: 0 };
 // the save's state goes back into the world: the airship stair once the fortress is beaten
-function openAirship(G, announce) { for (const [x, y, z] of airshipCells(W0)) if (tileAt(G.L, x, y, z) === T.EMPTY) { G.L.tiles[(y * G.L.d + z) * G.L.w + x] = T.CLOUD; if (S.V) S.V.touch(x, z); } if (announce) { banner(L('通往飛行船的雲梯出現了！', 'A cloud stair to the airship has appeared!'), L('在熔岩城的南邊', 'south of the Lava Castle')); sound.play('note'); } }
+function openAirship(G, announce) { for (const [x, y, z] of airshipCells(W0)) if (tileAt(G.L, x, y, z) === T.EMPTY) { G.L.set(x, y, z, T.CLOUD); if (S.V) S.V.touch(x, z); } if (announce) { banner(L('通往飛行船的雲梯出現了！', 'A cloud stair to the airship has appeared!'), L('在熔岩城的南邊', 'south of the Lava Castle')); sound.play('note'); } }
 function newWorld() {
   const at = SAVE.at && !isSolid(tileAt(W0, Math.floor(SAVE.at[0]), Math.floor(SAVE.at[1]), Math.floor(SAVE.at[2]))) ? SAVE.at : W0.start;
   S.G = newRun(W0, { power: SAVE.power, at, done: SAVE.cleared, found: SAVE.secrets });
@@ -57,7 +58,40 @@ function newWorld() {
 }
 newWorld();
 S.V = buildWorldView(scene, S.G); S.V.prime(S.G.hero.x, S.G.hero.z);
-const heroMesh = makeHero(); heroMesh.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(heroMesh);
+const shadowed = (m) => { m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); scene.add(m); return m; };
+const broMesh = { josh: shadowed(makeHero('josh')), jasper: shadowed(makeHero('jasper')) };
+const BRO_STAT = { josh: { speedMul: 1.1, jumpMul: 1 }, jasper: { speedMul: 1, jumpMul: 1.15 } };
+const otherBro = () => (SAVE.bro === 'josh' ? 'jasper' : 'josh');
+let heroMesh = broMesh[SAVE.bro], buddyMesh = broMesh[otherBro()];
+function applyBro() { const h = S.G.hero; Object.assign(h, BRO_STAT[SAVE.bro]); heroMesh = broMesh[SAVE.bro]; buddyMesh = broMesh[otherBro()]; heroMesh.userData.power = buddyMesh.userData.power = -1; if ($('bname')) $('bname').textContent = BROS[SAVE.bro].name.toUpperCase(); }
+applyBro();
+const buddy = { x: 0, y: 0, z: 0, w: 0.7, d: 0.7, vx: 0, vy: 0, vz: 0, face: 0, onGround: true, power: 0, inv: 0, flyT: 0, wag: 0, spin: 0, pm: 0, statue: 0, cx: 0, cz: 0, init: false };
+const trail = [];
+// the brother walks in your footsteps, a step and a half behind; if he falls too far behind he catches up at once
+function follow(dt) {
+  const h = S.G.hero, hx = h.x + h.w / 2, hz = h.z + h.d / 2, last = trail[trail.length - 1];
+  if (!last || Math.hypot(hx - last[0], h.y - last[1], hz - last[2]) > 0.12) { trail.push([hx, h.y, hz, h.onGround || h.swimming, !!h.swimming]); if (trail.length > 400) trail.shift(); }
+  const B = buddy;
+  if (!B.init || h.dead || Math.hypot(B.cx - hx, B.y - h.y, B.cz - hz) > 12) { B.cx = hx; B.y = h.y; B.cz = hz; B.init = true; trail.length = 0; }
+  let need = 1.6, px = hx, py = h.y, pz = hz, tgt = null;
+  for (let i = trail.length - 1; i >= 0; i--) { const p = trail[i], d = Math.hypot(p[0] - px, p[1] - py, p[2] - pz); if (d >= need) { const k = need / d; tgt = [px + (p[0] - px) * k, py + (p[1] - py) * k, pz + (p[2] - pz) * k, p[3], p[4]]; trail.splice(0, Math.max(0, i - 2)); break; } need -= d; px = p[0]; py = p[1]; pz = p[2]; }
+  const ox = B.cx, oy = B.y, oz = B.cz;
+  if (tgt) { const k = Math.min(1, dt * 10); B.cx += (tgt[0] - B.cx) * k; B.y += (tgt[1] - B.y) * k; B.cz += (tgt[2] - B.cz) * k; B.onGround = tgt[3]; B.swimming = tgt[4]; }
+  else { B.onGround = h.onGround || h.swimming; B.swimming = h.swimming; }
+  const sdt = Math.max(dt, 1e-3); B.vx = (B.cx - ox) / sdt; B.vz = (B.cz - oz) / sdt; B.vy = (B.y - oy) / sdt;
+  if (Math.hypot(B.vx, B.vz) > 0.4) B.face = Math.atan2(B.vx, B.vz); else if (Math.hypot(hx - B.cx, hz - B.cz) > 0.3) B.face = Math.atan2(hx - B.cx, hz - B.cz);
+  B.x = B.cx - B.w / 2; B.z = B.cz - B.d / 2; B.power = h.power === 4 ? 1 : h.power; B.flyT = !B.onGround && h.flyT > 0 ? h.flyT : 0;
+  poseHero(buddyMesh, B, dt, S.t + 0.37); buddyMesh.visible = S.warpT <= 0 || buddyMesh.visible;
+}
+function swapBro() {
+  const h = S.G.hero; if (h.dead || S.warpT > 0 || S.mode !== 'world') return;
+  SAVE.bro = otherBro(); store();
+  // you take over the brother who was behind you, right where he stands (if there is room)
+  const B = buddy, hx = h.x + h.w / 2, hy = h.y, hz = h.z + h.d / 2;
+  if (B.init && Math.hypot(B.cx - hx, B.cz - hz) > 0.3 && !solidAt(B.cx, B.y + 0.3, B.cz) && !solidAt(B.cx, B.y + 1.3, B.cz)) { h.x = B.cx - h.w / 2; h.z = B.cz - h.d / 2; h.y = B.y; h.vx = h.vz = 0; B.cx = hx; B.y = hy; B.cz = hz; h.face = Math.atan2(hx - (h.x + h.w / 2), hz - (h.z + h.d / 2)) + Math.PI; trail.length = 0; }
+  applyBro(); sound.play('leaf');
+  toast(SAVE.bro === 'josh' ? L('換 Josh 上場！跑得比較快', 'Josh’s turn! He runs a little faster') : L('換 Jasper 上場！跳得比較高', 'Jasper’s turn! He jumps a little higher'));
+}
 const blob = new THREE.Mesh(new THREE.CircleGeometry(0.42, 20), new THREE.MeshBasicMaterial({ color: '#000000', transparent: true, opacity: 0.25, depthWrite: false })); blob.rotation.x = -Math.PI / 2; scene.add(blob);
 const shade = (m) => { m.traverse((o) => { if (o.isMesh) o.castShadow = true; }); return m; };
 const cam = { yaw: Math.PI * 0.75, pitch: 0.42, dist: 11, manual: 0 };
@@ -70,7 +104,7 @@ const ents = new Map(), anims = [];
 
 // ---------------------------------------------------------------- input: keyboard, controller and touch all become the same buttons
 const keys = new Set(), tapped = new Set();
-const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pound: ['KeyC', 'KeyL', 'ControlLeft'], camL: ['KeyQ'], camR: ['KeyE'], pause: ['Escape', 'KeyP'], confirm: ['Enter'], items: ['Tab', 'KeyI'], map: ['KeyM'] };
+const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pound: ['KeyC', 'KeyL', 'ControlLeft'], camL: ['KeyQ'], camR: ['KeyE'], pause: ['Escape', 'KeyP'], confirm: ['Enter'], items: ['Tab', 'KeyI'], map: ['KeyM'], swap: ['KeyV'] };
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return; sound.start();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -78,7 +112,7 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 const touchHeld = {};
-for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-c', 'pound'], ['t-pause', 'pause']]) {
+for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-c', 'pound'], ['t-pause', 'pause'], ['t-swap', 'swap']]) {
   const b = $(id); const on = (e) => { e.preventDefault(); sound.start(); if (!touchHeld[k]) tapped.add(k); touchHeld[k] = true; b.classList.add('on'); }, off = () => { touchHeld[k] = false; b.classList.remove('on'); };
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
 }
@@ -96,7 +130,7 @@ function readButtons() {
     const b = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed), ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = (v) => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
     stick.x = dz(ax); stick.y = dz(ay); stick.rx = dz(gp.axes[2] || 0); stick.ry = dz(gp.axes[3] || 0);
     digital.left = digital.left || b(14); digital.right = digital.right || b(15); digital.up = digital.up || b(12); digital.down = digital.down || b(13);
-    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), pound: b(3) || b(6), pause: b(9), items: b(8), map: b(4) };
+    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), pound: b(3) || b(6), pause: b(9), items: b(8), map: b(4), swap: b(5) };
     if (Object.values(pad).some(Boolean) && !PAD.used) { PAD.used = true; staticText(); }
     for (const k in pad) held[k] = held[k] || pad[k];
   }
@@ -134,6 +168,7 @@ const itemImg = (it) => (it === 'mush' || it === 'flower' || it === 'star' ? car
 const clearedN = () => ORDER.filter((id) => SAVE.cleared[id]).length;
 const secretsN = () => W0.secrets.filter((x) => SAVE.secrets[x.id]).length;
 function hud() {
+  $('bname').textContent = BROS[SAVE.bro].name.toUpperCase();
   $('lives').textContent = SAVE.lives; $('coins').textContent = String(SAVE.coins).padStart(2, '0');
   const h = S.G.hero, pm = h.pm, lit = Math.floor(pm * 6 + 0.001);
   $('pm').innerHTML = [0, 1, 2, 3, 4, 5].map((i) => `<i class="${i < lit ? 'on' : ''}">▶</i>`).join('') + `<b class="${pm >= 1 ? 'on' : ''}">P</b>`;
@@ -217,11 +252,11 @@ function mapPanel() {
   g.font = '900 15px "Noto Sans TC", sans-serif'; g.textAlign = 'center';
   const K = 512 / W0.w; g.font = '900 11px "Noto Sans TC", sans-serif';
   const label = (text, x, z, col) => { g.lineWidth = 3; g.strokeStyle = '#1a1a1a'; g.strokeText(text, x * K, z * K); g.fillStyle = col; g.fillText(text, x * K, z * K); };
-  for (const id of ORDER) { const co = COURSES[id], Lv = LEVELS[id]; label(`${SAVE.cleared[id] ? '★' : ''}${SAVE.warps[id] ? '◎' : ''}${N(co.region)}`, co.ox + Lv.w / 2, co.oz + Lv.d / 2, SAVE.cleared[id] ? '#ffd030' : '#ffffff'); }
-  const LANDPOS = { snow: [160, 40], forest: [450, 40], desert: [440, 250], volcano: [460, 440], isles: [170, 520] };
+  for (const id of ORDER) { const co = COURSES[id], cw = co.w ?? LEVELS[id].w, cd = co.d ?? LEVELS[id].d; label(`${SAVE.cleared[id] ? '★' : ''}${SAVE.warps[id] ? '◎' : ''}${N(co.region)}`, co.ox + cw / 2, co.oz + cd / 2, SAVE.cleared[id] ? '#ffd030' : '#ffffff'); }
+  const LANDPOS = { snow: [140, 60], forest: [380, 60], desert: [480, 300], volcano: [460, 470], isles: [180, 560], peak: [690, 300], abyss: [400, 760], ...Object.fromEntries(Object.entries(W0.places || {}).filter(([k]) => LAND_ORDER.includes(k)).map(([k, v]) => [k, [v[0], v[1] - 14]])) };
   g.font = '900 14px "Noto Sans TC", sans-serif';
   for (const id of LAND_ORDER) { const [x, z] = LANDPOS[id], all = W0.secrets.filter((q2) => q2.land === id), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${SAVE.warps[id] ? '◎' : ''}${N(LANDS[id].name)} ✦${got}/${all.length}`, x, z, '#ffe8a0'); }
-  { const all = W0.secrets.filter((q2) => q2.land === 'core'), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${N(['蘑菇村', 'Mushroom Village'])}  ✦${got}/${all.length}`, 70, 228, '#ff9a9a'); }
+  { const all = W0.secrets.filter((q2) => q2.land === 'core'), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${N(['蘑菇村', 'Mushroom Village'])}  ✦${got}/${all.length}`, W0.start[0], W0.start[2] - 16, '#ff9a9a'); }
   for (const sc of W0.secrets) if (SAVE.secrets[sc.id]) { g.fillStyle = '#ffd030'; g.font = '12px sans-serif'; g.fillText('✦', sc.x * K, sc.z * K + 4); }
   const h = S.G.hero, hx = h.x * K, hz = h.z * K; g.save(); g.translate(hx, hz); g.rotate(-h.face + Math.PI); g.fillStyle = '#ff3a2a'; g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -9); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
@@ -322,6 +357,7 @@ function syncEntities(dt) {
 }
 const STEP = 1 / 120;
 function worldStep(dt, held, edge, digital, stick) {
+  if (edge.swap) swapBro();
   const G = S.G, h = G.hero;
   if (edge.pause) return menuPanel();
   if (edge.items) return itemsPanel();
@@ -401,7 +437,7 @@ function placeCamera(dt) {
   sun.position.set(S.camT.x - 14, S.camT.y + 40, S.camT.z + 18); sun.target.position.copy(S.camT);
   // the sky and the fog: dark in the cave and the fortress, blue under the sea
   const inside = S.region && (S.region.theme === 'cave' || S.region.theme === 'fort') && (COURSES[S.region.id] || null);
-  setSky(h.swimming ? 'under' : inside ? S.region.theme : S.region ? (S.region.sky || (S.region.theme === 'fort' ? 'grass' : S.region.theme)) : 'grass');
+  setSky(h.swimming ? (h.y < SEA - 70 ? 'abyss' : h.y < SEA - 28 ? 'deep' : 'under') : inside ? S.region.theme : S.region ? (S.region.sky || (S.region.theme === 'fort' ? 'grass' : S.region.theme)) : 'grass');
   const fl = floorBelow(G.L, hx, h.y + 0.1, hz); blob.visible = !h.dead && fl > -50; blob.position.set(hx, fl + 0.03, hz); blob.scale.setScalar(Math.max(0.4, 1 - Math.max(0, h.y - fl) * 0.06));
 }
 
@@ -415,12 +451,13 @@ function frame(now) {
     $('t-play').disabled = S.V.ready < Math.min(S.V.total, 60);
     if ((edge.jump || edge.confirm) && !$('t-play').disabled) play();
     // a slow flight over the village while the island is built
-    const a = S.t * 0.08, [sx, , sz] = W0.start; camera.position.set(sx + 20 + Math.cos(a) * 40, 46, sz + Math.sin(a) * 40); camera.lookAt(sx + 20, 18, sz); setSky('grass');
-    poseHero(heroMesh, S.G.hero, dt, S.t);
+    const a = S.t * 0.08, [sx, sy, sz] = W0.start; camera.position.set(sx + 20 + Math.cos(a) * 40, sy + 30, sz + Math.sin(a) * 40); camera.lookAt(sx + 20, sy + 2, sz); setSky('grass');
+    poseHero(heroMesh, S.G.hero, dt, S.t); follow(dt);
   } else {
     if (S.panel) panelInput(edge); else worldStep(dt, held, edge, digital, stick);
     placeCamera(dt);
     if (S.warpT <= 0) poseHero(heroMesh, S.G.hero, dt, S.t);
+    follow(dt);
     S.V.follow(S.G.hero.x, S.G.hero.z);
     syncEntities(dt); stepAnims(dt);
     hudT += dt; if (hudT > 0.1) { hudT = 0; hud(); }
@@ -436,13 +473,22 @@ const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移�
     : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（有尾巴時在空中連按可以飛；水裡按跳游泳）· Shift／X 跑步＋丟火球／甩尾巴 · C：空中屁股蹬地；站在水管上進水管；狸貓裝按住變石像；青蛙裝下潛 · Q／E 或拖曳 轉視角 · Tab 道具 · M 地圖 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with a tail, tap in the air to fly; in water, jump swims) · Shift / X run, throw fire, swing your tail · C: ground pound in the air; go down a pipe you stand on; hold for the Tanooki statue; dive as a frog · Q / E or drag: camera · Tab items · M map · Esc menu');
 function staticText() {
   document.documentElement.lang = EN() ? 'en' : 'zh-Hant';
-  $('t-sub').textContent = L('整座葉葉國是一個巨大的開放 3D 世界！蘑菇村、雪原、巨菇森林、沙漠金字塔、火山和南方群島，爬雲梯上天、潛進海底、鑽進山洞。收集每一關的星星，還有藏在各地的秘密星星：看不見的方塊、地上的 X、紅色金幣、裂開的磚牆、沒有名牌的水管……（簡單模式）', 'All of Leafy Land is one huge open 3D world! Mushroom Village, the snowfields, the giant mushroom forest, the desert pyramid, the volcano and the southern isles; climb cloud stairs, dive under the sea, burrow through mountains. Win every course’s star, and hunt the secret stars hidden everywhere: invisible blocks, an X on the ground, red coins, cracked brick walls, pipes with no name… (Easy mode)');
+  $('t-sub').textContent = L('Josh 和 Jasper 兄弟的葉葉國是一個巨大的開放 3D 世界！蘑菇村、雪原、巨菇森林、沙漠金字塔、火山、南方群島、高聳入雲的天梯峰和深淵大洋，爬雲梯上天、潛進海底、鑽進山洞。收集每一關的星星，還有藏在各地的秘密星星：看不見的方塊、地上的 X、紅色金幣、裂開的磚牆、沒有名牌的水管……（簡單模式）', 'All of Leafy Land is one huge open 3D world! Josh and Jasper’s Leafy Land: Mushroom Village, the snowfields, the giant mushroom forest, the desert pyramid, the volcano, the southern isles, the towering Skyreach Peak and the Abyssal Sea; climb cloud stairs, dive under the sea, burrow through mountains. Win every course’s star, and hunt the secret stars hidden everywhere: invisible blocks, an X on the ground, red coins, cracked brick walls, pipes with no name… (Easy mode)');
   $('t-play').textContent = hadSave ? L('繼續冒險', 'Continue') : L('開始', 'Start');
+  pickBro(SAVE.bro, true);
   $('t-lang').textContent = EN() ? '中文' : 'English';
   $('t-help').textContent = helpText();
   $('maphelp').textContent = L('Tab 道具 · M 地圖', 'Tab items · M map');
   if (S.mode === 'world') { hud(); hudItems(); }
 }
+function pickBro(k, quiet) {
+  if (S.mode === 'title' && SAVE.bro !== k) { SAVE.bro = k; store(); applyBro(); }
+  for (const b of ['josh', 'jasper']) $('t-' + b).classList.toggle('on', b === SAVE.bro);
+  $('t-josh').innerHTML = `<b>Josh</b><small>${L('哥哥 · 跑得快', 'big brother · runs faster')}</small>`; $('t-jasper').innerHTML = `<b>Jasper</b><small>${L('弟弟 · 跳得高', 'little brother · jumps higher')}</small>`;
+  $('t-pick').textContent = L('選一個兄弟（遊戲中按 V／RB／⇄ 隨時交換）', 'Pick a brother (swap any time with V / RB / ⇄)');
+  if (!quiet) sound.play('click');
+}
+$('t-josh').onclick = () => { sound.start(); pickBro('josh'); }; $('t-jasper').onclick = () => { sound.start(); pickBro('jasper'); };
 function setLang(l) { lang = l; try { localStorage.setItem('leafleap.lang', lang); } catch (e) { /* ignore */ } staticText(); }
 function play() {
   if (S.mode !== 'title') return;

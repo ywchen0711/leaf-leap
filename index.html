@@ -20,6 +20,8 @@
   <div id="title">
     <div class="logo"><span class="zh">葉葉跳跳<sup>3D</sup></span><span class="en">LEAF LEAP 3D</span></div>
     <p id="t-sub"></p>
+    <p id="t-pick" class="help"></p>
+    <div class="row bros"><button id="t-josh" class="bro josh"></button><button id="t-jasper" class="bro jasper"></button></div>
     <div class="row"><button id="t-play" class="go big"></button><button id="t-lang"></button></div>
     <p id="t-help" class="help"></p>
   </div>
@@ -27,21 +29,21 @@
   <div id="hud" hidden>
     <div id="bar">
       <div class="cell"><span id="where">WORLD 1</span><span id="pm"></span></div>
-      <div class="cell"><span class="hero">PIP ×<b id="lives">5</b></span><span class="coin">◎<b id="coins">00</b></span></div>
+      <div class="cell"><span class="hero"><b id="bname">JOSH</b> ×<b id="lives">5</b></span><span class="coin">◎<b id="coins">00</b></span></div>
       <div id="cards"></div>
     </div>
     <div id="mapui" hidden><div id="nodename"></div><div id="items"></div><div id="maphelp"></div></div>
     <div id="pad">
       <div class="dpad"><button id="t-up">▲</button><button id="t-left">◀</button><button id="t-right">▶</button><button id="t-down">▼</button></div>
       <div class="ab"><button id="t-c">⤓</button><button id="t-b">B</button><button id="t-a">A</button></div>
-      <button id="t-pause">❚❚</button>
+      <button id="t-pause">❚❚</button><button id="t-swap">⇄</button>
     </div>
   </div>
   <div id="banner"></div>
   <div id="toast"></div>
   <div id="panel" hidden></div>
 
-  <script type="module" src="js/main.js?v=6"></script>
+  <script type="module" src="js/main.js?v=7"></script>
   <script src="/hub.js" data-pos="top-left" defer></script>
 </body>
 </html>

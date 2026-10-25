@@ -2,16 +2,18 @@
 // world can still be finished from its start, the pipes and stairs are where they should be
 import { T, newRun, step, tileAt, isSolid, floorBelow } from '../js/game.js';
 import { LEVELS } from '../js/levels.js';
-import { buildWorld, COURSES, ORDER, LAND_ORDER, airshipCells, regionAt, GY } from '../js/world.js';
+import { buildWorld, COURSES, ORDER, LAND_ORDER, airshipCells, regionAt, GY, SEA } from '../js/world.js';
 
 let fails = 0;
 const ok = (name, cond, extra = '') => { console.log((cond ? 'ok   ' : 'FAIL ') + name + (extra ? '  ' + extra : '')); if (!cond) fails++; };
 const DT = 1 / 120, NONE = { mx: 0, mz: 0, jump: false, jumpPressed: false, run: false, runPressed: false, poundPressed: false };
 const t0 = Date.now(), W0 = buildWorld();
-ok('the world builds quickly', Date.now() - t0 < 3000, `${Date.now() - t0} ms`);
+ok('the world builds quickly', Date.now() - t0 < 6000, `${Date.now() - t0} ms`);
+{ const mem = W0.store.c.reduce((a, c) => a + c.a.length, 0); ok('the world fits in memory', mem < 120e6, `${(mem / 1e6).toFixed(0)} MB`); }
+{ let top = 0, low = 1e9; for (const v of W0.heightMap) { top = Math.max(top, v); low = Math.min(low, v); } ok('a mountain ten times higher than the old peaks', top - GY >= 200, `${top - GY} blocks above the plains`); ok('a sea more than a hundred blocks deep', SEA - low >= 100, `${SEA - low} blocks deep`); }
 const [vx, vy, vz] = W0.start;
 ok('the village start is open ground', isSolid(tileAt(W0, vx, vy - 1, vz)) && !isSolid(tileAt(W0, vx, vy, vz)) && !isSolid(tileAt(W0, vx, vy + 1, vz)));
-ok('every course is in the world', ORDER.every((id) => COURSES[id] && LEVELS[id]));
+ok('every course is in the world', ORDER.every((id) => COURSES[id] && (LEVELS[id] || COURSES[id].gen)));
 ok('there is a warp pipe to every course in the village, and one home from each', ORDER.every((id) => W0.warps.some((p) => p.warp.kind === 'to' && p.warp.region === id) && W0.warps.some((p) => p.warp.kind === 'home' && p.warp.region === id)));
 
 // the same runner as tools/test.mjs, heading for the course's waypoints, now inside the whole world
@@ -39,7 +41,7 @@ function runCourse(id, power) {
   }
   return { why: 'timeout' };
 }
-for (const id of ORDER) for (const [power, label] of [[0, 'small'], [1, 'big']]) {
+for (const id of ORDER.filter((q) => !COURSES[q].gen)) for (const [power, label] of [[0, 'small'], [1, 'big']]) {
   const r = runCourse(id, power);
   ok(`${id} can be finished inside the world (${label})`, r.done, r.done ? `${r.t.toFixed(0)} s${r.arena ? ', reached the boss' : ''}` : `${r.why} at course x ${r.x?.toFixed(1)} z ${r.z?.toFixed(1)}`);
 }
@@ -68,4 +70,8 @@ ok('every unmarked pipe leads somewhere and back', W0.warps.filter((p) => p.warp
 // eight red coins make their star appear
 { const r = W0.reds[0], G = newRun(W0, {}); for (const c of G.reds[0].coins) { G.hero.x = c.x; G.hero.y = c.y; G.hero.z = c.z; G.hero.vy = 0; step(G, NONE, DT); }
   ok('the eighth red coin brings out a secret star', G.items.some((it) => it.kind === 'secret' && it.id === r.id)); }
+// the deep trench: dive from the dock (in the frog suit, holding the dive) to the finish line in the temple at the bottom
+{ const g = W0.goals.find((q) => q.region === '1-D'), st = W0.checks.find((c) => c.region === '1-D' && c.start), G = newRun(W0, { power: 5, god: true, at: [st.x + 6, st.y, st.z] }), h = G.hero; let done = false, t = 0;
+  for (; t < 120 && !done; t += DT) { const dx = g.x + 1 - h.x, dz = g.z - h.z, l = Math.hypot(dx, dz) || 1, deep = h.y > g.y + 0.5; for (const e of step(G, { ...NONE, mx: dx / l * (deep && l < 3 ? 0 : 1), mz: dz / l * (deep && l < 3 ? 0 : 1), pound: deep, jump: !deep && h.swimming }, DT)) if (e.t === 'clear' && e.region === '1-D') done = true; }
+  ok('the deep trench can be dived to the bottom and finished', done, done ? `${t.toFixed(0)} s, ${(SEA - g.y).toFixed(0)} blocks down` : `stuck at y ${h.y.toFixed(1)} (${(h.x - g.x).toFixed(1)}, ${(h.z - g.z).toFixed(1)} from the goal)`); }
 console.log(fails ? `${fails} failed` : 'all passed'); process.exit(fails ? 1 : 0);

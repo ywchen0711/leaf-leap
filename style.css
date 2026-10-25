@@ -60,6 +60,7 @@ button.focus { outline: 4px solid var(--gold); outline-offset: 3px; }
   #t-a { right: 20px; bottom: calc(110px + env(safe-area-inset-bottom, 0px)); background: rgba(216, 40, 42, 0.9) !important; color: #fff; }
   #t-b { right: 110px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); background: rgba(255, 200, 40, 0.9) !important; }
   #t-c { right: 40px; bottom: calc(206px + env(safe-area-inset-bottom, 0px)); width: 60px !important; height: 60px !important; font-size: 24px !important; }
+  #t-swap { right: 70px; top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; font-size: 20px !important; }
   #t-pause { right: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; font-size: 14px !important; }
   #bar { bottom: auto; top: calc(8px + env(safe-area-inset-top, 0px)); font-size: 9px; padding: 4px 6px; gap: 6px; }
   #cards span { width: 26px; height: 32px; } #cards img { width: 22px; height: 22px; }
@@ -104,3 +105,10 @@ button.focus { outline: 4px solid var(--gold); outline-offset: 3px; }
 .say.small { font-size: 13px; }
 #nodename:empty { display: none; }
 #items { cursor: pointer; pointer-events: auto; }
+
+/* ---------- the brothers on the title ---------- */
+.bros { gap: 12px; }
+.bro { display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 150px; padding: 10px 16px; border-radius: 18px; border: 3px solid rgba(0, 0, 0, 0.25); opacity: 0.7; transition: transform 0.15s, opacity 0.15s; }
+.bro b { font-size: 22px; } .bro small { font-size: 12px; opacity: 0.85; }
+.bro.josh { background: linear-gradient(#ff7a6a, #e84a3a); color: #fff; } .bro.jasper { background: linear-gradient(#6ad87a, #3aa84a); color: #fff; }
+.bro.on { opacity: 1; transform: scale(1.07); border-color: #ffd030; box-shadow: 0 0 0 3px #fff, 0 6px 18px rgba(0, 0, 0, 0.3); }
