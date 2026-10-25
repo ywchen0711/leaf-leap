@@ -2,11 +2,11 @@
 // Leafy Land is a single island now: walk anywhere, climb the cloud stairs, take a warp pipe home to Mushroom Village,
 // and cross each course's finish line for its card. There is no world map any more; the map screen shows the island.
 import * as THREE from 'three';
-import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js';
-import { LEVELS } from './levels.js';
-import { buildWorld, COURSES, ORDER, airshipCells, regionAt, GY } from './world.js';
-import { buildWorldView, worldMapImage, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js';
-import { Sound } from './audio.js';
+import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=5';
+import { LEVELS } from './levels.js?v=5';
+import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY } from './world.js?v=5';
+import { buildWorldView, worldMapImage, makeHero, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=5';
+import { Sound } from './audio.js?v=5';
 
 const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------- language
@@ -19,8 +19,8 @@ const N = (pair) => pair[EN() ? 1 : 0];
 
 // ---------------------------------------------------------------- the save (an old world-map save carries over)
 const KEY = 'leafleap.save';
-const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {} });
-let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && (s.v === 1 || s.v === 2)) return { ...fresh(), ...s, v: 2, at: s.v === 2 ? s.at : null }; } catch (e) { /* none */ } return null; })();
+const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {}, secrets: {}, big: true });
+let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && (s.v === 1 || s.v === 2)) return { ...fresh(), ...s, v: 2, at: s.v === 2 && s.big ? s.at : null, big: true }; } catch (e) { /* none */ } return null; })();
 const hadSave = !!SAVE; if (!SAVE) SAVE = fresh();
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SAVE)); } catch (e) { /* private mode */ } };
 
@@ -39,7 +39,8 @@ addEventListener('resize', resize); resize();
 const sound = new Sound();
 const skyTex = (a, b) => { const c = document.createElement('canvas'); c.width = 2; c.height = 128; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, 2, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
 const SKIES = { grass: ['#4aa8ff', '#d0f0ff', '#cfeaff', 70, 230], map: ['#4aa8ff', '#d0f0ff', '#cfeaff', 70, 230], sky: ['#2a8aff', '#e8f6ff', '#e0f2ff', 80, 260], water: ['#3a9ae8', '#c8ecff', '#cfeaff', 70, 230], airship: ['#ff8a4a', '#ffe0a8', '#ffc890', 70, 240],
-  cave: ['#05070d', '#141a30', '#0a0e1a', 14, 46], fort: ['#100e16', '#2a2030', '#1a1620', 16, 50], under: ['#1a5aa8', '#2a7ac8', '#2a7ac8', 6, 40] };
+  cave: ['#05070d', '#141a30', '#0a0e1a', 14, 46], fort: ['#100e16', '#2a2030', '#1a1620', 16, 50], under: ['#1a5aa8', '#2a7ac8', '#2a7ac8', 6, 40],
+  snow: ['#8ab8e8', '#f4f8ff', '#e8f0fa', 60, 200], desert: ['#5aa8e8', '#fff0c8', '#f8e4b8', 70, 220], volcano: ['#5a2a2a', '#e8805a', '#a8604a', 40, 160] };
 const skyCache = {};
 function setSky(k) { if (S.sky === k) return; S.sky = k; const s = SKIES[k]; scene.background = skyCache[k] || (skyCache[k] = skyTex(s[0], s[1])); scene.fog = new THREE.Fog(s[2], s[3], s[4]); }
 
@@ -50,7 +51,7 @@ const S = { mode: 'title', panel: null, G: null, V: null, deadT: 0, acc: 0, t: 0
 function openAirship(G, announce) { for (const [x, y, z] of airshipCells(W0)) if (tileAt(G.L, x, y, z) === T.EMPTY) { G.L.tiles[(y * G.L.d + z) * G.L.w + x] = T.CLOUD; if (S.V) S.V.touch(x, z); } if (announce) { banner(L('通往飛行船的雲梯出現了！', 'A cloud stair to the airship has appeared!'), L('在熔岩城的南邊', 'south of the Lava Castle')); sound.play('note'); } }
 function newWorld() {
   const at = SAVE.at && !isSolid(tileAt(W0, Math.floor(SAVE.at[0]), Math.floor(SAVE.at[1]), Math.floor(SAVE.at[2]))) ? SAVE.at : W0.start;
-  S.G = newRun(W0, { power: SAVE.power, at, done: SAVE.cleared });
+  S.G = newRun(W0, { power: SAVE.power, at, done: SAVE.cleared, found: SAVE.secrets });
   S.G.respawn = at;
   if (SAVE.cleared['1-F']) openAirship(S.G, false);
 }
@@ -131,12 +132,13 @@ function banner(text, sub) { const d = $('banner'); d.innerHTML = `<b>${text}</b
 const cardImg = (k) => `<img src="${cardDataURL(k)}" alt="${k}">`;
 const itemImg = (it) => (it === 'mush' || it === 'flower' || it === 'star' ? cardImg(it) : `<img src="${iconURL(it)}" alt="${it}">`);
 const clearedN = () => ORDER.filter((id) => SAVE.cleared[id]).length;
+const secretsN = () => W0.secrets.filter((x) => SAVE.secrets[x.id]).length;
 function hud() {
   $('lives').textContent = SAVE.lives; $('coins').textContent = String(SAVE.coins).padStart(2, '0');
   const h = S.G.hero, pm = h.pm, lit = Math.floor(pm * 6 + 0.001);
   $('pm').innerHTML = [0, 1, 2, 3, 4, 5].map((i) => `<i class="${i < lit ? 'on' : ''}">▶</i>`).join('') + `<b class="${pm >= 1 ? 'on' : ''}">P</b>`;
   $('cards').innerHTML = [0, 1, 2].map((i) => `<span>${SAVE.cards[i] ? cardImg(SAVE.cards[i]) : ''}</span>`).join('');
-  $('where').textContent = `★${clearedN()}/${ORDER.length} ${S.region ? N(S.region.name) : ''}`;
+  $('where').textContent = `★${clearedN()}/${ORDER.length} ✦${secretsN()}/${W0.secrets.length} ${S.region ? N(S.region.name) : ''}`;
 }
 function hudItems() { $('items').innerHTML = `<span>🎒</span>` + (SAVE.items.length ? SAVE.items.map(itemImg).join('') : `<small>${L('（沒有道具）', '(no items)')}</small>`) + `<em>${N(POWER_NAME[S.G.hero.power])}</em>`; }
 const POWER_NAME = [['小', 'Small'], ['大', 'Big'], ['火焰', 'Fire'], ['狸貓尾巴', 'Raccoon'], ['狸貓裝', 'Tanooki'], ['青蛙裝', 'Frog']];
@@ -159,7 +161,7 @@ function prompt(text) { const d = $('nodename'); if (d.dataset.t === (text || ''
 
 // ---------------------------------------------------------------- Mushroom Houses, the spade panel, items
 // the first house hides a leaf, a tanooki suit and a frog suit; the second, the two suits and a P-wing
-const HOUSE_ITEMS = { house: ['leaf', 'tanooki', 'frog'], house2: ['tanooki', 'frog', 'pwing'] };
+const HOUSE_ITEMS = { house: ['leaf', 'tanooki', 'frog'], house2: ['tanooki', 'frog', 'pwing'], house3: ['pwing', 'leaf', 'tanooki'] };
 function housePanel(id) {
   const chest = [...HOUSE_ITEMS[id]].sort(() => Math.random() - 0.5);
   showPanel('house', L('蘑菇小屋', 'Mushroom House'), () => `<p class="say">${L('歡迎！選一個寶箱，裡面的道具送給你。', 'Welcome! Pick a chest, and what is inside is yours.')}</p><div class="chests">${[1, 2, 3].map((i) => btn(`<i class="chest"></i>${i}`, () => {
@@ -210,12 +212,18 @@ function itemsPanel() {
 let mapImg = null;
 function mapPanel() {
   if (!mapImg) mapImg = worldMapImage(W0);
-  showPanel('map', N(['葉葉國', 'Leafy Land']), () => `<div class="wmap"><canvas id="wmapc" width="512" height="512"></canvas></div><p class="say small">${L('★ 已過關　◎ 傳送水管已開　▲ 你在這裡', '★ cleared  ◎ warp pipe open  ▲ you are here')}</p>${btn(L('關閉', 'Close'), closePanel, { cls: 'go' })}`);
+  showPanel('map', N(['葉葉國', 'Leafy Land']), () => `<div class="wmap"><canvas id="wmapc" width="512" height="512"></canvas></div><p class="say small">${L(`★ 已過關　◎ 傳送水管已開　✦ 找到的秘密星星（${secretsN()} / ${W0.secrets.length}）　▲ 你在這裡`, `★ cleared  ◎ warp pipe open  ✦ secret stars found (${secretsN()} / ${W0.secrets.length})  ▲ you are here`)}</p>${btn(L('關閉', 'Close'), closePanel, { cls: 'go' })}`);
   const c = $('wmapc'), g = c.getContext('2d'); g.imageSmoothingEnabled = false; g.drawImage(mapImg, 0, 0, 512, 512);
   g.font = '900 15px "Noto Sans TC", sans-serif'; g.textAlign = 'center';
-  for (const id of ORDER) { const co = COURSES[id], Lv = LEVELS[id], x = (co.ox + Lv.w / 2) * 2, z = (co.oz + Lv.d / 2) * 2; const label = `${SAVE.cleared[id] ? '★' : ''}${SAVE.warps[id] ? '◎' : ''}${N(co.region)}`; g.lineWidth = 4; g.strokeStyle = '#1a1a1a'; g.strokeText(label, x, z); g.fillStyle = SAVE.cleared[id] ? '#ffd030' : '#ffffff'; g.fillText(label, x, z); }
-  g.strokeText(N(['蘑菇村', 'Mushroom Village']), 40, 220); g.fillStyle = '#ff8a8a'; g.fillText(N(['蘑菇村', 'Mushroom Village']), 40, 220);
-  const h = S.G.hero, hx = h.x * 2, hz = h.z * 2; g.save(); g.translate(hx, hz); g.rotate(-h.face + Math.PI); g.fillStyle = '#ff3a2a'; g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -9); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
+  const K = 512 / W0.w; g.font = '900 11px "Noto Sans TC", sans-serif';
+  const label = (text, x, z, col) => { g.lineWidth = 3; g.strokeStyle = '#1a1a1a'; g.strokeText(text, x * K, z * K); g.fillStyle = col; g.fillText(text, x * K, z * K); };
+  for (const id of ORDER) { const co = COURSES[id], Lv = LEVELS[id]; label(`${SAVE.cleared[id] ? '★' : ''}${SAVE.warps[id] ? '◎' : ''}${N(co.region)}`, co.ox + Lv.w / 2, co.oz + Lv.d / 2, SAVE.cleared[id] ? '#ffd030' : '#ffffff'); }
+  const LANDPOS = { snow: [160, 40], forest: [450, 40], desert: [440, 250], volcano: [460, 440], isles: [170, 520] };
+  g.font = '900 14px "Noto Sans TC", sans-serif';
+  for (const id of LAND_ORDER) { const [x, z] = LANDPOS[id], all = W0.secrets.filter((q2) => q2.land === id), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${SAVE.warps[id] ? '◎' : ''}${N(LANDS[id].name)} ✦${got}/${all.length}`, x, z, '#ffe8a0'); }
+  { const all = W0.secrets.filter((q2) => q2.land === 'core'), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${N(['蘑菇村', 'Mushroom Village'])}  ✦${got}/${all.length}`, 70, 228, '#ff9a9a'); }
+  for (const sc of W0.secrets) if (SAVE.secrets[sc.id]) { g.fillStyle = '#ffd030'; g.font = '12px sans-serif'; g.fillText('✦', sc.x * K, sc.z * K + 4); }
+  const h = S.G.hero, hx = h.x * K, hz = h.z * K; g.save(); g.translate(hx, hz); g.rotate(-h.face + Math.PI); g.fillStyle = '#ff3a2a'; g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -9); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
 function menuPanel() {
   showPanel('menu', L('選單', 'Menu'), () => {
@@ -237,6 +245,7 @@ function warpTo(at, msg) { const G = S.G; respawn(G, at, G.hero.power); G.respaw
 // the warp pipe you are standing on, if any
 function pipeUnder(h) { if (!h.onGround) return null; const cx = h.x + h.w / 2, cz = h.z + h.d / 2; return W0.warps.find((p) => cx > p.x && cx < p.x + 2 && cz > p.z && cz < p.z + 2 && Math.abs(h.y - (p.base + p.hgt)) < 0.1) || null; }
 function pipeTarget(p) {
+  if (p.warp.kind === 'secret') return p.warp.to;
   if (p.warp.kind === 'home') { const hub = W0.warps.find((q2) => q2.warp.kind === 'to' && q2.warp.region === p.warp.region); return [hub.x + 0.5, hub.base + hub.hgt, hub.z + 2.6]; }
   const dest = W0.warps.find((q2) => q2.warp.kind === 'home' && q2.warp.region === p.warp.region && !q2.warp.end); return [dest.x + 0.5, dest.base + dest.hgt, dest.z + 0.5];
 }
@@ -255,9 +264,23 @@ function onEvent(e) {
     case 'clear': courseClear(e.region, e.card, e.again); break;
     case 'bossdown': sound.play('bosshit'); setTimeout(() => courseClear(e.region, 'star', !!SAVE.cleared[e.region], true), 900); break;
     case 'check': sound.play('check'); toast(L('通過中間點！', 'Checkpoint!')); SAVE.at = G.respawn; store(); break;
-    case 'arrive': SAVE.at = G.respawn; if (e.region && COURSES[e.region] && !SAVE.warps[e.region]) { SAVE.warps[e.region] = true; toast(L('村子裡通往這裡的水管打開了！', 'The village pipe to here is open now!')); } store(); break;
+    case 'arrive': SAVE.at = G.respawn; if (e.region && PLACES[e.region] && !SAVE.warps[e.region]) { SAVE.warps[e.region] = true; toast(L('村子裡通往這裡的水管打開了！', 'The village pipe to here is open now!')); } store(); break;
+    case 'secret': foundSecret(e.id); break;
+    case 'redcoin': sound.play('coin'); toast(`<span style="color:#e8302a">●</span> ${L('紅色金幣', 'Red coin')} ${e.n} / ${e.of}`); if (e.n === e.of) { sound.play('sprout'); toast(L('秘密星星出現了！', 'A secret star has appeared!')); } break;
+    case 'dig': sound.play('break'); dust(e.x + 0.5, e.y + 1, e.z + 0.5); break;
+    case 'bat': sound.play('wag'); break;
     case 'jump': case 'stomp': case 'kick': case 'thud': case 'fire': case 'tail': case 'note': case 'hurt': case 'sprout': case 'bosshit': case 'bosshop': case 'bossfire': case 'fly': case 'wag': case 'splash': case 'swim': case 'hop': case 'statue': case 'unstatue': case 'cannon': case 'wand': sound.play(e.t); break;
   }
+}
+// a secret star: every fifth one brings a gift
+const MILESTONES = { 5: ['leaf', 1], 10: ['pwing', 3], 15: ['tanooki', 2], 20: ['pwing', 3], 25: ['frog', 5], 30: ['pwing', 5], 40: ['tanooki', 10] };
+function foundSecret(id) {
+  if (SAVE.secrets[id]) return; SAVE.secrets[id] = true; S.G.found[id] = true;
+  const n = secretsN(), all = W0.secrets.length; sound.play('fanfare');
+  let sub = `✦ ${n} / ${all}`;
+  const m = MILESTONES[n]; if (m) { SAVE.items.push(m[0]); if (SAVE.items.length > 8) SAVE.items.shift(); SAVE.lives += m[1]; sub += ` · ${L('獎勵', 'reward')}: ${N(ITEM_NAME[m[0]])} + ${m[1]}UP`; hudItems(); }
+  if (n === all) { sub += ` · ${L('全部找到了！你是傳說中的跳跳！', 'All found! You are the legendary hopper!')}`; SAVE.lives += 20; }
+  banner(L('秘密星星！', 'Secret star!'), sub); store(); hud();
 }
 // a course's finish line or its boss: a card, and the first time a star for Leafy Land
 function courseClear(region, card, again, boss) {
@@ -292,6 +315,7 @@ function syncEntities(dt) {
   const sync = (list, make, pose) => { for (const o of list) { if (!near(o)) continue; seen.add(o); let m = ents.get(o); if (!m) { m = make(o); scene.add(m); ents.set(o, m); } pose(m, o); } };
   sync(G.enemies, (e) => shade(makeEnemy(e)), (m, e) => poseEnemy(m, e, dt, S.t));
   sync(G.items, (it) => shade(makeItem(it.kind)), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.z + it.d / 2); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
+  sync(G.reds.flatMap((r) => r.coins.filter((c) => !c.got)), () => makeRedCoin(), (m, c) => { m.position.set(c.x + 0.35, c.y + 0.5, c.z + 0.35); m.rotation.y = S.t * 3; });
   sync(G.fire, () => makeFireball(), (m, f) => { m.position.set(f.x + f.w / 2, f.y + f.h / 2, f.z + f.d / 2); });
   sync(G.shots, (s) => makeShot(s.kind), (m, s) => { m.position.set(s.x + 0.3, s.y + 0.2, s.z + 0.3); m.rotation.y = Math.atan2(s.vx, s.vz) + Math.PI / 2; });
   for (const [o, m] of ents) if (!seen.has(o)) { scene.remove(m); ents.delete(o); }
@@ -312,10 +336,10 @@ function worldStep(dt, held, edge, digital, stick) {
   // standing on a warp pipe: C goes down it
   const pipe = !h.dead ? pipeUnder(h) : null;
   if (pipe) {
-    const to = pipe.warp.region, name = N(COURSES[to].region), open = pipe.warp.kind === 'home' || SAVE.warps[to];
-    prompt(pipe.warp.kind === 'home' ? L(`按 C 進水管 → 回蘑菇村`, `C: down the pipe → Mushroom Village`) : open ? L(`按 C 進水管 → ${name}`, `C: down the pipe → ${name}`) : L(`還沒去過「${name}」：先走過去，這根水管才會通`, `You haven’t been to ${name} yet: walk there first to open this pipe`));
-    if (edge.pound && open) { S.warpT = 0.6; S.warpTo = pipeTarget(pipe); S.warpMsg = pipe.warp.kind === 'home' ? N(['蘑菇村', 'Mushroom Village']) : name; sound.play('fly'); prompt(''); return; }
-  } else prompt('');
+    const to = pipe.warp.region, secretPipe = pipe.warp.kind === 'secret', name = secretPipe ? '？？？' : N(PLACES[to].name), open = secretPipe || pipe.warp.kind === 'home' || SAVE.warps[to];
+    prompt(secretPipe ? L('按 C 進水管 → ？？？', 'C: down the pipe → ???') : pipe.warp.kind === 'home' ? L(`按 C 進水管 → 回蘑菇村`, `C: down the pipe → Mushroom Village`) : open ? L(`按 C 進水管 → ${name}`, `C: down the pipe → ${name}`) : L(`還沒去過「${name}」：先走過去，這根水管才會通`, `You haven’t been to ${name} yet: walk there first to open this pipe`));
+    if (edge.pound && open) { S.warpT = 0.6; S.warpTo = pipeTarget(pipe); S.warpMsg = secretPipe ? '' : pipe.warp.kind === 'home' ? N(['蘑菇村', 'Mushroom Village']) : name; sound.play('fly'); prompt(''); return; }
+  } else { const hn = W0.hints.find((q2) => Math.abs(q2.x - (h.x + h.w / 2)) < 2.2 && Math.abs(q2.z - (h.z + h.d / 2)) < 2.2 && Math.abs(q2.y - 2 - h.y) < 3); prompt(hn ? `📜 ${N(hn.text)}` : ''); }
   S.acc += dt; let first = true;
   while (S.acc >= STEP) {
     S.acc -= STEP;
@@ -376,8 +400,8 @@ function placeCamera(dt) {
   camera.lookAt(S.camT);
   sun.position.set(S.camT.x - 14, S.camT.y + 40, S.camT.z + 18); sun.target.position.copy(S.camT);
   // the sky and the fog: dark in the cave and the fortress, blue under the sea
-  const inside = S.region && (S.region.theme === 'cave' || S.region.theme === 'fort') && COURSES[S.region.id];
-  setSky(h.swimming ? 'under' : inside ? S.region.theme : S.region ? (S.region.theme === 'fort' ? 'grass' : S.region.theme) : 'grass');
+  const inside = S.region && (S.region.theme === 'cave' || S.region.theme === 'fort') && (COURSES[S.region.id] || null);
+  setSky(h.swimming ? 'under' : inside ? S.region.theme : S.region ? (S.region.sky || (S.region.theme === 'fort' ? 'grass' : S.region.theme)) : 'grass');
   const fl = floorBelow(G.L, hx, h.y + 0.1, hz); blob.visible = !h.dead && fl > -50; blob.position.set(hx, fl + 0.03, hz); blob.scale.setScalar(Math.max(0.4, 1 - Math.max(0, h.y - fl) * 0.06));
 }
 
@@ -388,15 +412,16 @@ function frame(now) {
   const { held, edge, digital, stick } = readButtons();
   S.V.work(S.mode === 'title' ? 14 : 6);
   if (S.mode === 'title') {
-    $('t-play').disabled = S.V.ready < Math.min(S.V.total, 40);
+    $('t-play').disabled = S.V.ready < Math.min(S.V.total, 60);
     if ((edge.jump || edge.confirm) && !$('t-play').disabled) play();
     // a slow flight over the village while the island is built
-    const a = S.t * 0.08; camera.position.set(22 + Math.cos(a) * 40, 46, 110 + Math.sin(a) * 40); camera.lookAt(40, 18, 110); setSky('grass');
+    const a = S.t * 0.08, [sx, , sz] = W0.start; camera.position.set(sx + 20 + Math.cos(a) * 40, 46, sz + Math.sin(a) * 40); camera.lookAt(sx + 20, 18, sz); setSky('grass');
     poseHero(heroMesh, S.G.hero, dt, S.t);
   } else {
     if (S.panel) panelInput(edge); else worldStep(dt, held, edge, digital, stick);
     placeCamera(dt);
     if (S.warpT <= 0) poseHero(heroMesh, S.G.hero, dt, S.t);
+    S.V.follow(S.G.hero.x, S.G.hero.z);
     syncEntities(dt); stepAnims(dt);
     hudT += dt; if (hudT > 0.1) { hudT = 0; hud(); }
   }
@@ -411,7 +436,7 @@ const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移�
     : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（有尾巴時在空中連按可以飛；水裡按跳游泳）· Shift／X 跑步＋丟火球／甩尾巴 · C：空中屁股蹬地；站在水管上進水管；狸貓裝按住變石像；青蛙裝下潛 · Q／E 或拖曳 轉視角 · Tab 道具 · M 地圖 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with a tail, tap in the air to fly; in water, jump swims) · Shift / X run, throw fire, swing your tail · C: ground pound in the air; go down a pipe you stand on; hold for the Tanooki statue; dive as a frog · Q / E or drag: camera · Tab items · M map · Esc menu');
 function staticText() {
   document.documentElement.lang = EN() ? 'en' : 'zh-Hant';
-  $('t-sub').textContent = L('整座葉葉國是一個開放的 3D 世界！自由奔跑、爬雲梯上天空、潛進海灣、鑽進山洞、闖進熔岩城，穿上狸貓裝飛、穿上青蛙裝游泳，收集每一關的星星，最後登上飛行船。（簡單模式）', 'All of Leafy Land is one open 3D world! Run anywhere, climb cloud stairs into the sky, dive into the bay, burrow through the mountain, storm the Lava Castle, fly in the Tanooki Suit, swim in the Frog Suit, win every course’s star, and board the airship at last. (Easy mode)');
+  $('t-sub').textContent = L('整座葉葉國是一個巨大的開放 3D 世界！蘑菇村、雪原、巨菇森林、沙漠金字塔、火山和南方群島，爬雲梯上天、潛進海底、鑽進山洞。收集每一關的星星，還有藏在各地的秘密星星：看不見的方塊、地上的 X、紅色金幣、裂開的磚牆、沒有名牌的水管……（簡單模式）', 'All of Leafy Land is one huge open 3D world! Mushroom Village, the snowfields, the giant mushroom forest, the desert pyramid, the volcano and the southern isles; climb cloud stairs, dive under the sea, burrow through mountains. Win every course’s star, and hunt the secret stars hidden everywhere: invisible blocks, an X on the ground, red coins, cracked brick walls, pipes with no name… (Easy mode)');
   $('t-play').textContent = hadSave ? L('繼續冒險', 'Continue') : L('開始', 'Start');
   $('t-lang').textContent = EN() ? '中文' : 'English';
   $('t-help').textContent = helpText();

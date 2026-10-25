@@ -8,13 +8,14 @@ A 3D platformer for the browser in the spirit of Super Mario Bros. 3 and its 3D 
 
 ## The game
 
-- **One open world.** All of Leafy Land is a single 3D island (256 × 256 blocks) to roam freely: meadows and rolling hills, voxel trees you can climb onto, beaches, a snowy mountain, a lava castle and the sea. Every course of the old world map sits where it belongs in it:
+- **One huge open world.** All of Leafy Land is a single 3D island, 576 × 576 blocks, to roam freely. In the middle-west lies the old heartland (meadows, hills, voxel trees you can climb onto, the mountain, the Lava Castle and Coral Bay), with every course of the old world map set where it belongs:
   - **1-1 Meadow Path, 1-2 Rolling Hills, 1-4 Pipe Grove** run across the land;
   - **1-3 Cloud Bridges** and **1-6 Sky Gym** float in the sky (cloud stairs climb up to them, and falling off lands you in the meadow below);
-  - **1-W Coral Bay** lies under the sea in the south;
-  - **1-5 Underground Cave** tunnels through the mountain;
-  - **1-F Stone Fortress** is inside the Lava Castle, across a drawbridge over the moat;
+  - **1-W Coral Bay** lies under the sea; **1-5 Underground Cave** tunnels through the mountain; **1-F Stone Fortress** is inside the Lava Castle;
   - **1-A The Airship** waits above the sea; a cloud stair to it only appears once the fortress has fallen.
+- **Five more lands** around it, each with its own sky, music, baddies and landmarks: **Frostpeak Snowfields** (a frozen lake that is slippery underfoot, an ice mountain with a cave, an igloo, sharp peaks), the **Giant Mushroom Forest** (caps to climb; blue ones bounce you), the **Sunsand Desert** (a stepped pyramid, an oasis, a desert town with a third Mushroom House, a cactus maze, a mesa), **Mount Ember** (a crater lake of lava, a lava tube full of bats, an obsidian tower) and the **Southern Isles** (a lighthouse with a spiral stair, a shipwreck, a sunken ring of pillars).
+- **45 secret stars** hidden everywhere: invisible blocks you only find by jumping into them, an X on the ground to ground-pound, sets of eight red coins, cracked brick doors to swing your tail at, unmarked pipes down to bonus vaults, the tallest treetop, the highest peak, the sea floor. Old stone tablets whisper riddles when you stand next to them; the map counts what is left in each land, and every fifth star brings a gift.
+- **Livelier characters:** a rounder hero with gloves, buttons, a moustache, blinking blue eyes and a leaf badge on the cap; Mushlings with angry brows and fangs dressed for each land; turtles with plated shells; spinies you must not stomp; bats that swoop; cactus stacks that lose a piece to each stomp.
 - **Mushroom Village** in the west: walk in at a Mushroom House door to pick a chest, step onto the green spade panel to play the card game (both restock each time you win a new star), and use the row of **warp pipes**: each one opens once you have been to its course, and every course has a pipe home. Stand on a pipe and press the pound button.
 - **Stars:** cross a course's finish line (or beat its boss) for its card and a star; nine to find. Checkpoint flags and course starts are where you come back after a fall.
 - **The map** (M) shows the whole island, every course, which are done and which pipes are open. Each area has its own music and sky; the cave and the fortress are dark, and the sea turns blue around you.
@@ -48,7 +49,7 @@ A 3D platformer for the browser in the spirit of Super Mario Bros. 3 and its 3D 
 
 ## Code
 
-Plain ES modules and [three.js](https://threejs.org/) from a CDN, with no build step. The world is meshed in 16 × 16 chunks that hold only visible faces (one texture atlas, with ambient occlusion), built nearest-first a few chunks a frame. `npm test` runs every course on its own and again inside the world. Block textures are 16×16 pixel art drawn on canvases, and all sound is synthesized with Web Audio.
+Plain ES modules and [three.js](https://threejs.org/) from a CDN, with no build step. The world is meshed in 16 × 16 chunks that hold only visible faces (one texture atlas, with ambient occlusion), built nearest-first a few chunks a frame and dropped again once far behind. `npm test` runs every course on its own and again inside the world. Block textures are 16×16 pixel art drawn on canvases, and all sound is synthesized with Web Audio.
 
 - `js/game.js`: the rules: a 3D block grid, running, jumping, pounding and flying, enemies, blocks, power-ups and goals (no DOM)
 - `js/levels.js`: the eight 3D levels, built with small helpers, and the world map

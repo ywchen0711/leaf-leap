@@ -1,6 +1,6 @@
 // LEAF LEAP 3D — the levels of Leafy Land and its world map. Each level is a grid of blocks built with a few helpers:
 // x runs along the course, z is depth (side to side), y counts up; plain ground is two blocks deep (you stand at y = 2).
-import { T } from './game.js';
+import { T } from './game.js?v=5';
 
 const CH = { X: T.GROUND, B: T.BRICK, '?': T.QCOIN, L: T.QLEAF, F: T.QFLOWER, '1': T.Q1UP, T: T.QTANOOKI, R: T.QFROG, U: T.USED, H: T.HARD, '-': T.CLOUD, N: T.NOTE, v: T.LAVA, o: T.COIN, S: T.STONE, C: T.CANNON, P: T.PLANK, '.': T.EMPTY };
 function level(id, name, theme, w, d, h, build) {

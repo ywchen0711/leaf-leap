@@ -3,8 +3,11 @@
 export const T = { EMPTY: 0, GROUND: 1, BRICK: 2, QCOIN: 3, QLEAF: 4, USED: 5, HARD: 6, PIPE: 7, PIPETOP: 8, CLOUD: 9, NOTE: 10, LAVA: 11, Q1UP: 12, QFLOWER: 13, COIN: 14, STONE: 15,
   WATER: 16, QTANOOKI: 17, QFROG: 18, CANNON: 19, PLANK: 20,
   // the open world's land: sand, tree trunks and leaves, plaster walls, roof tiles, the spade panel, snow
-  SAND: 21, LOG: 22, LEAVES: 23, WALL: 24, ROOF: 25, SPADE: 26, SNOW: 27 };
-const SOLID = new Uint8Array(32); for (const t of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]) SOLID[t] = 1;
+  SAND: 21, LOG: 22, LEAVES: 23, WALL: 24, ROOF: 25, SPADE: 26, SNOW: 27,
+  // secrets and the new lands: an invisible block (only there when you jump into it from below), an X to dig at,
+  // slippery ice, dark basalt, sandstone, giant mushroom stems and caps, cactus
+  HIDDEN: 28, XMARK: 29, ICE: 30, BASALT: 31, SANDSTONE: 32, STEM: 33, CAPBLUE: 34, CAPGOLD: 35, CACTUS: 36 };
+const SOLID = new Uint8Array(64); for (const t of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36]) SOLID[t] = 1;
 export const isSolid = (t) => SOLID[t] === 1;
 export const isQ = (t) => t === T.QCOIN || t === T.QLEAF || t === T.Q1UP || t === T.QFLOWER || t === T.QTANOOKI || t === T.QFROG;
 // powers: 0 small, 1 big, 2 fire, 3 raccoon (the leaf), 4 tanooki suit, 5 frog suit
@@ -34,7 +37,7 @@ function sweep(L, o, axis, dist) {
   let best = null, bd = 99;
   for (let i = p0; i <= p1; i++) for (let j = q0; j <= q1; j++) {
     const c = { [axis]: face, [p]: i, [q]: j }, t = tileAt(L, c.x, c.y, c.z);
-    if (isSolid(t) || (axis === 'y' && dist < 0 && t === T.CLOUD && before >= face + 1 - 0.001)) {
+    if (isSolid(t) || (axis === 'y' && dist < 0 && t === T.CLOUD && before >= face + 1 - 0.001) || (axis === 'y' && dist > 0 && t === T.HIDDEN && o.hero)) {
       const dd = Math.hypot(i + 0.5 - (o[p] + o[EXT[p]] / 2), j + 0.5 - (o[q] + o[EXT[q]] / 2));
       if (dd < bd) { bd = dd; best = { ...c, t }; }
     }
@@ -51,7 +54,7 @@ export const inWater = (L, o) => tileAt(L, Math.floor(o.x + o.w / 2), Math.floor
 export function newRun(def, opts = {}) {
   const L = { w: def.w, h: def.h, d: def.d, tiles: def.tiles.slice(), theme: def.theme };
   const at = opts.checkpoint && def.check ? def.check : def.start;
-  const hero = { x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, w: 0.7, d: 0.7, h: 0.9, vx: 0, vy: 0, vz: 0, face: Math.PI / 2, onGround: true, power: 0, inv: 0, pm: 0, flyT: 0, wag: 0, spin: 0,
+  const hero = { hero: true, x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, w: 0.7, d: 0.7, h: 0.9, vx: 0, vy: 0, vz: 0, face: Math.PI / 2, onGround: true, power: 0, inv: 0, pm: 0, flyT: 0, wag: 0, spin: 0,
     coyote: 0, buffer: 0, dead: false, deadT: 0, prevY: at[1], fireCd: 0, pound: 0, poundT: 0, statue: 0, statueCd: 0, swimming: false, pwing: !!opts.pwing };
   // the P-wing: a raccoon tail and a P-meter that never runs out, for one level
   setPower(hero, opts.pwing && !hasTail({ power: opts.power || 0 }) ? POWER.LEAF : opts.power || 0);
@@ -60,10 +63,16 @@ export function newRun(def, opts = {}) {
   const spawns = def.ents.filter((e) => ENEMY[e.t]);
   const G = { def, L, hero, enemies: spawns.map(makeEnemy), items: [], fire: [], shots: [], cannons, t: 0, coins: 0, lives: 0, cleared: null, checked: !!opts.checkpoint,
     god: !!opts.god, ev: [], goal: def.goal ? { x: def.goal[0], y: def.goal[1], z: def.goal[2], w: 1, h: 1, d: 1 } : null, bossDown: false,
-    world: !!def.world, goals: def.goals || [], checks: def.checks || [], done: { ...(opts.done || {}) }, respawn: opts.at || def.start, spawns, graves: [] };
+    world: !!def.world, goals: def.goals || [], checks: def.checks || [], done: { ...(opts.done || {}) }, respawn: opts.at || def.start, spawns, graves: [],
+    found: { ...(opts.found || {}) }, secretAt: def.secretAt || {}, reds: [] };
+  for (const sc of def.secrets || []) if (sc.kind === 'free' && !G.found[sc.id]) G.items.push(secretItem(sc.id, sc.x, sc.y, sc.z, false));
+  for (const set of def.reds || []) if (!G.found[set.id]) G.reds.push({ id: set.id, center: set.center, coins: set.coins.map(([x, y, z]) => ({ x: x + 0.15, y: y + 0.1, z: z + 0.15, w: 0.7, h: 0.8, d: 0.7, got: false })), n: 0 });
   if (opts.at) { hero.x = opts.at[0] + 0.15; hero.y = opts.at[1]; hero.z = opts.at[2] + 0.15; hero.prevY = hero.y; }
   return G;
 }
+// a secret star: it rises out of where it was hidden, then floats there, turning
+export function secretItem(id, x, y, z, rise) { return { kind: 'secret', id, x: x + 0.05, y, z: z + 0.05, w: 0.9, h: 0.9, d: 0.9, vx: 0, vy: 0, vz: 0, rise: rise ? 0.8 : 0, by: y + (rise ? 1.28 : 0), t: 0, dx: 0, dz: 0 }; }
+function revealSecret(G, x, y, z) { const id = G.secretAt[x + ',' + y + ',' + z]; if (id && !G.found[id]) { G.items.push(secretItem(id, x, y, z, true)); G.ev.push({ t: 'sprout', x, y, z, secret: true }); return true; } return false; }
 export function setPower(h, p) { h.power = p; h.h = p ? 1.75 : 0.9; }
 // back on your feet at a checkpoint, as you were but small
 export function respawn(G, at, power = 0) {
@@ -81,9 +90,12 @@ const ENEMY = {
   K: () => ({ kind: 'boss', w: 2.1, d: 2.1, h: 2.5, speed: 2, hp: 3, hopT: 2.6, big: true, shotT: 2 }),
   J: () => ({ kind: 'boss', prince: true, w: 1.1, d: 1.1, h: 1.6, speed: 2.8, hp: 3, hopT: 1.8, shotT: 1.6 }),
   f: () => ({ kind: 'fish', w: 0.8, d: 0.8, h: 0.6, speed: 2.2 }),
+  s: () => ({ kind: 'walker', spiny: true, w: 0.8, d: 0.8, h: 0.75, speed: 1.9 }),
+  b: () => ({ kind: 'bat', w: 0.7, d: 0.7, h: 0.5, speed: 3.4, perch: true }),
+  c: () => ({ kind: 'pokey', w: 0.9, d: 0.9, h: 2.4, segs: 3, speed: 0.9 }),
 };
 function makeEnemy(e, i) {
-  const o = { id: i, spawn: e, region: e.region, x: e.x + 0.1, y: e.y, z: e.z + 0.1, vy: 0, dx: -1, dz: 0, alive: true, active: false, onGround: false, inv: 0, grace: 0, t: 0, ...ENEMY[e.t]() };
+  const o = { id: i, spawn: e, region: e.region, skin: e.skin, x: e.x + 0.1, y: e.y, z: e.z + 0.1, vy: 0, dx: -1, dz: 0, alive: true, active: false, onGround: false, inv: 0, grace: 0, t: 0, ...ENEMY[e.t]() };
   if (o.kind === 'plant') { o.x = e.x + 0.6; o.z = e.z + 0.6; o.baseY = e.y; o.y = e.y - o.h; o.phase = 0; }
   return o;
 }
@@ -113,6 +125,14 @@ function stepEnemy(G, e, dt) {
     e.y = e.baseY - e.h + e.h * k; e.out = k > 0.25; e.face = Math.atan2(toH.x, toH.z);
     return;
   }
+  if (e.kind === 'bat') {
+    // a bat hangs still until you come close, then flutters after you through the air
+    if (e.perch) { if (dist < 8 && Math.abs(h.y - e.y) < 6 && !h.dead) { e.perch = false; G.ev.push({ t: 'bat', x: e.x, y: e.y, z: e.z }); } return; }
+    const ty = h.y + 0.6 + Math.sin(e.t * 4) * 0.6, dy = ty - e.y, l = Math.hypot(toH.x, toH.z, dy) || 1, sp = e.speed;
+    if (dist > 22) { e.perch = true; return; }
+    sweep(L, e, 'x', toH.x / l * sp * dt); sweep(L, e, 'z', toH.z / l * sp * dt); sweep(L, e, 'y', dy / l * sp * dt);
+    e.face = Math.atan2(toH.x, toH.z); return;
+  }
   if (e.kind === 'fish') {
     // fish swim to and fro, and come after you when you are in the water nearby
     const hw = h.swimming && !h.dead && dist < 7 && Math.abs(h.y - e.y) < 4;
@@ -134,7 +154,7 @@ function stepEnemy(G, e, dt) {
     if (e.big || e.prince) { e.shotT -= dt; if (e.shotT <= 0 && dist < 16) { e.shotT = e.prince ? 2.4 : 3.2; G.shots.push({ kind: e.prince ? 'ring' : 'fire', x: e.x + e.w / 2 - 0.3, y: e.y + e.h * 0.55, z: e.z + e.d / 2 - 0.3, w: 0.6, h: 0.45, d: 0.6, vx: e.dx * (e.prince ? 7 : 6), vz: e.dz * (e.prince ? 7 : 6) }); G.ev.push({ t: e.prince ? 'wand' : 'bossfire' }); } }
   } else {
     // walkers wander, and turn towards you when you come close; shells spin in a straight line
-    if (e.kind === 'walker' && dist < 7 && Math.abs(h.y - e.y) < 2.5 && !h.dead) { const k = Math.min(1, dt * 1.5); e.dx += (toH.x / dist - e.dx) * k; e.dz += (toH.z / dist - e.dz) * k; const l = Math.hypot(e.dx, e.dz) || 1; e.dx /= l; e.dz /= l; }
+    if ((e.kind === 'walker' || e.kind === 'pokey') && dist < 7 && Math.abs(h.y - e.y) < 2.5 && !h.dead) { const k = Math.min(1, dt * 1.5); e.dx += (toH.x / dist - e.dx) * k; e.dz += (toH.z / dist - e.dz) * k; const l = Math.hypot(e.dx, e.dz) || 1; e.dx /= l; e.dz /= l; }
     const sp = e.kind === 'koopa' ? (e.state === 'spin' ? 11 : e.state === 'shell' ? 0 : e.speed) : e.speed;
     vx = e.dx * sp; vz = e.dz * sp;
   }
@@ -166,6 +186,7 @@ function hitBlock(G, x, y, z, fromAbove) {
   // whatever stands on the block gets knocked out, and a coin sitting on it is collected
   if (!fromAbove) for (const e of G.enemies) if (e.alive && e.active && e.kind !== 'plant' && e.kind !== 'boss' && e.x + e.w > x && e.x < x + 1 && e.z + e.d > z && e.z < z + 1 && Math.abs(e.y - (y + 1)) < 0.35) killEnemy(G, e, 'bump');
   if (tileAt(G.L, x, y + 1, z) === T.COIN) { setTile(G, x, y + 1, z, T.EMPTY); G.coins++; G.ev.push({ t: 'coin', x, y: y + 1, z }); }
+  if (t === T.HIDDEN) { setTile(G, x, y, z, T.USED); if (!revealSecret(G, x, y, z)) { G.lives++; G.ev.push({ t: 'oneup' }); } return; }
   if (t === T.QCOIN) { setTile(G, x, y, z, T.USED); G.coins++; G.ev.push({ t: 'coin', x, y, z, pop: true }); }
   else if (t === T.QLEAF || t === T.QFLOWER || t === T.Q1UP || t === T.QTANOOKI || t === T.QFROG) {
     setTile(G, x, y, z, T.USED);
@@ -211,7 +232,8 @@ function stepHero(G, inp, dt) {
   if (h.pound || h.statue > 0) { h.vx = h.vz = 0; }
   else {
     const tvx = want > 0.05 ? inp.mx / want * max : 0, tvz = want > 0.05 ? inp.mz / want * max : 0;
-    const a = (want > 0.05 ? (h.onGround ? PH.accel : PH.airAccel) : (h.onGround ? PH.fric : PH.airFric)) * dt;
+    const ice = h.onGround && h.floorT === T.ICE;
+    const a = (want > 0.05 ? (h.onGround ? (ice ? 10 : PH.accel) : PH.airAccel) : (h.onGround ? (ice ? 2.5 : PH.fric) : PH.airFric)) * dt;
     const dvx = tvx - h.vx, dvz = tvz - h.vz, dl = Math.hypot(dvx, dvz);
     if (dl <= a) { h.vx = tvx; h.vz = tvz; } else { h.vx += dvx / dl * a; h.vz += dvz / dl * a; }
     if (want > 0.05) h.face = Math.atan2(inp.mx, inp.mz);
@@ -264,11 +286,11 @@ function stepHero(G, inp, dt) {
       // landing a pound: breaks the brick (or hits the ? block) underneath and knocks out enemies close by
       h.pound = 0; G.ev.push({ t: 'pound', x: h.x, y: h.y, z: h.z });
       const cells = new Set(); for (const [ox, oz] of [[0.1, 0.1], [h.w - 0.1, 0.1], [0.1, h.d - 0.1], [h.w - 0.1, h.d - 0.1]]) cells.add(Math.floor(h.x + ox) + ',' + Math.floor(h.z + oz));
-      for (const c of cells) { const [cx, cz] = c.split(',').map(Number), t = tileAt(L, cx, r.y, cz); if (t === T.BRICK || isQ(t)) hitBlock(G, cx, r.y, cz, true); }
+      for (const c of cells) { const [cx, cz] = c.split(',').map(Number), t = tileAt(L, cx, r.y, cz); if (t === T.BRICK || isQ(t)) hitBlock(G, cx, r.y, cz, true); else if (t === T.XMARK) { setTile(G, cx, r.y, cz, T.GROUND); G.ev.push({ t: 'dig', x: cx, y: r.y, z: cz }); if (!revealSecret(G, cx, r.y, cz)) { G.coins += 3; G.ev.push({ t: 'coin', x: cx, y: r.y + 1, z: cz, pop: true }); } } }
       for (const e of G.enemies) if (e.alive && e.active && e.kind !== 'plant' && flatDist(h, e) < 2 && Math.abs(e.y - h.y) < 1.2) killEnemy(G, e, 'pound');
     } else if (!was && h.vy < -10) G.ev.push({ t: 'land' });
-    h.vy = 0; h.onGround = true;
-    if (r.t === T.NOTE) { h.vy = inp.jump ? PH.noteHold : PH.note; h.onGround = false; G.ev.push({ t: 'note' }); G.ev.push({ t: 'bumpblock', x: r.x, y: r.y, z: r.z, down: true }); }
+    h.vy = 0; h.onGround = true; h.floorT = r.t;
+    if (r.t === T.NOTE || r.t === T.CAPBLUE) { h.vy = (inp.jump ? PH.noteHold : PH.note) * (r.t === T.CAPBLUE ? 1.15 : 1); h.onGround = false; G.ev.push({ t: 'note' }); G.ev.push({ t: 'bumpblock', x: r.x, y: r.y, z: r.z, down: true }); }
   } else if (r && !falling) { h.vy = -0.5; hitBlock(G, r.x, r.y, r.z); }
   if (h.spin > 0) {
     // a spin of the tail all round you
@@ -318,9 +340,13 @@ export function step(G, inp, dt) {
     if (h.statue > 0) continue;
     if (e.kind === 'plant' || (e.kind === 'fish' && !fromAbove)) { hurt(G); continue; }
     if (e.kind === 'fish') { killEnemy(G, e, 'stomp'); h.vy = PH.stomp; continue; }
+    if (e.spiny) { hurt(G); if (fromAbove) h.vy = PH.stomp * 0.6; continue; }
+    if (e.kind === 'pokey' && !fromAbove) { hurt(G); continue; }
     if (fromAbove) {
       if (h.pound) { h.pound = 0; }
       h.vy = inp.jump ? PH.stompHold : PH.stomp; h.y = e.y + e.h;
+      if (e.kind === 'pokey') { e.segs--; e.h = Math.max(0.8, e.segs * 0.8); G.ev.push({ t: 'stomp' }); if (e.segs <= 0) killEnemy(G, e, 'stomp'); continue; }
+      if (e.kind === 'bat') { killEnemy(G, e, 'stomp'); continue; }
       if (e.kind === 'walker') { if (e.wings) { e.wings = false; G.ev.push({ t: 'stomp' }); } else killEnemy(G, e, 'stomp'); }
       else if (e.kind === 'koopa') {
         if (e.state === 'walk') { e.state = 'shell'; e.h = 0.8; }
@@ -334,7 +360,8 @@ export function step(G, inp, dt) {
   // items
   for (const it of G.items) {
     it.t += dt;
-    if (it.rise > 0) { it.rise -= dt; it.y += dt * 1.6; continue; }
+    if (it.rise > 0) { it.rise -= dt; it.y += dt * 1.6; if (it.kind === 'secret' && it.rise <= 0) it.by = it.y; continue; }
+    if (it.kind === 'secret') { it.y = it.by + Math.sin(it.t * 2) * 0.15; if (!h.dead && overlap(h, it)) { it.gone = true; G.found[it.id] = true; G.ev.push({ t: 'secret', id: it.id }); } continue; }
     if (it.kind === 'leaf') { if (it.vy > 0) { it.vy -= 30 * dt; it.y += it.vy * dt; } else { it.y -= 1.3 * dt; it.x = it.bx + Math.sin(it.t * 3) * 1.1; } }
     else if (it.kind !== 'flower' && it.kind !== 'tanooki' && it.kind !== 'frog') {
       it.vy = Math.max(-PH.fall, it.vy - 40 * dt);
@@ -345,6 +372,11 @@ export function step(G, inp, dt) {
     if (it.y < -3) it.gone = true;
   }
   G.items = G.items.filter((i) => !i.gone);
+  for (const set of G.reds) {
+    if (set.done) continue;
+    for (const c of set.coins) if (!c.got && !h.dead && overlap(h, c)) { c.got = true; set.n++; G.ev.push({ t: 'redcoin', n: set.n, of: set.coins.length, x: c.x, y: c.y, z: c.z }); }
+    if (set.n >= set.coins.length) { set.done = true; const [x, y, z] = set.center; G.items.push(secretItem(set.id, x, y, z, true)); G.ev.push({ t: 'sprout', x, y, z, secret: true }); }
+  }
   // fireballs bounce along and knock out enemies
   for (const f of G.fire) {
     f.life -= dt; f.vy -= 50 * dt;
