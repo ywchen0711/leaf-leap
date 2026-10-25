@@ -98,3 +98,9 @@ button.focus { outline: 4px solid var(--gold); outline-offset: 3px; }
 @keyframes blink { from { opacity: 1; } to { opacity: 0.3; } }
 @media (prefers-reduced-motion: reduce) { #curtain { transition: none; } #banner.on { animation: none; opacity: 1; } }
 @media (max-width: 600px) { #bar { font-size: 9px; } #cards span { width: 26px; height: 32px; } #cards img { width: 22px; height: 22px; } }
+
+/* ---------- the open world ---------- */
+.wmap { display: flex; justify-content: center; } .wmap canvas { width: min(512px, 78vw, 62vh); height: auto; aspect-ratio: 1; image-rendering: pixelated; border: 3px solid var(--ink); border-radius: 10px; }
+.say.small { font-size: 13px; }
+#nodename:empty { display: none; }
+#items { cursor: pointer; pointer-events: auto; }

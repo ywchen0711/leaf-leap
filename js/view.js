@@ -318,3 +318,167 @@ export function makeShot(kind) {
 export function makeCoinPop() { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.08, 12), cmat('#ffd030', '#7a5000')); m.rotation.x = Math.PI / 2; return m; }
 export const tileBox = (key) => new THREE.Mesh(BOX, mat(key));
 export { box, look };
+
+// ================================================================ the open world: meshed in chunks
+// Every 16 × 16 column of the world is one mesh holding only the faces you can see, textured from one atlas, with a
+// touch of ambient occlusion in the corners. A block that changes rebuilds just its chunk.
+Object.assign(TEX, {
+  log: () => px('log', (g) => { rect(g, '#8a5a2a', 0, 0, 16, 16); for (const x of [2, 6, 10, 13]) rect(g, '#6a4220', x, 0, 1, 16); for (const [x, y] of [[4, 3], [8, 9], [12, 5], [3, 12]]) rect(g, '#a87a40', x, y, 1, 2); }),
+  logtop: () => px('logtop', (g) => { rect(g, '#8a5a2a', 0, 0, 16, 16); g.strokeStyle = '#c8a060'; for (const r of [2, 4.5, 7]) { g.beginPath(); g.arc(8, 8, r, 0, 7); g.stroke(); } }),
+  leaves: () => px('leaves', (g) => { rect(g, '#2a9a3a', 0, 0, 16, 16); for (const [x, y] of [[1, 2], [6, 1], [11, 3], [3, 7], [9, 8], [14, 9], [2, 12], [7, 13], [12, 14]]) { rect(g, '#4ac85a', x, y, 2, 2); rect(g, '#1a6a2a', x + 1, y + 2, 2, 1); } }),
+  wall: () => px('wall', (g) => { rect(g, '#f8f0dc', 0, 0, 16, 16); for (const [x, y] of [[3, 4], [10, 2], [6, 10], [13, 12]]) rect(g, '#e8dcc0', x, y, 2, 1); rect(g, '#d8c8a8', 0, 15, 16, 1); }),
+  roof: () => px('roof', (g) => { rect(g, '#e8302a', 0, 0, 16, 16); for (const [x, y, r] of [[4, 4, 2.4], [12, 6, 1.8], [7, 12, 2]]) { g.fillStyle = '#ffffff'; g.beginPath(); g.arc(x, y, r, 0, 7); g.fill(); } rect(g, '#a81a18', 0, 15, 16, 1); }),
+  spade: () => px('spade', (g) => { rect(g, '#2a9a4a', 0, 0, 16, 16); rect(g, '#1a6a2a', 0, 15, 16, 1); rect(g, '#1a6a2a', 15, 0, 1, 16); g.fillStyle = '#ffffff'; g.font = 'bold 12px sans-serif'; g.fillText('♠', 3, 13); }),
+  snow: () => px('snow', (g) => { rect(g, '#f4f8ff', 0, 0, 16, 16); for (const [x, y] of [[3, 3], [10, 6], [5, 11], [13, 13]]) rect(g, '#d8e4f4', x, y, 2, 1); }),
+  sandside: () => px('sandside', (g) => { rect(g, '#e8c888', 0, 0, 16, 16); for (const [x, y] of [[2, 3], [9, 7], [5, 12], [13, 10]]) rect(g, '#c8a868', x, y, 2, 1); }),
+});
+const ATLAS_KEYS = ['dirt', 'grass', 'grasstop', 'brick', 'q', 'used', 'wood', 'cloud', 'note', 'lava', 'stone', 'sand', 'plank', 'cannon', 'log', 'logtop', 'leaves', 'wall', 'roof', 'spade', 'snow', 'sandside', 'checker'];
+let ATLAS = null;
+function atlas() {
+  if (ATLAS) return ATLAS;
+  const c = document.createElement('canvas'); c.width = 128; c.height = 64; const g = c.getContext('2d');
+  ATLAS_KEYS.forEach((k, i) => g.drawImage(TEX[k]().image, (i % 8) * 16, Math.floor(i / 8) * 16));
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestFilter; t.generateMipmaps = false;
+  ATLAS = { tex: t, uv: Object.fromEntries(ATLAS_KEYS.map((k, i) => { const e = 0.002, u0 = (i % 8) / 8 + e, u1 = (i % 8 + 1) / 8 - e, r = Math.floor(i / 8), v1 = 1 - r / 4 - e, v0 = 1 - (r + 1) / 4 + e; return [k, [u0, v0, u1, v1]]; })) };
+  return ATLAS;
+}
+// the texture for each face of each kind of block (0 +x, 1 -x, 2 top, 3 bottom, 4 +z, 5 -z)
+function faceKey(L, t, x, y, z, f) {
+  switch (t) {
+    case T.GROUND: { const above = tileAt(L, x, y + 1, z); if (isSolid(above) && above !== T.PIPE && above !== T.PIPETOP) return 'dirt'; return f === 2 ? 'grasstop' : f === 3 ? 'dirt' : 'grass'; }
+    case T.SAND: return f === 2 ? 'sand' : 'sandside';
+    case T.LOG: return f === 2 || f === 3 ? 'logtop' : 'log';
+    case T.SNOW: return f === 3 ? 'dirt' : 'snow';
+    case T.LEAVES: return 'leaves'; case T.WALL: return 'wall'; case T.ROOF: return 'roof'; case T.SPADE: return f === 2 ? 'spade' : 'stone';
+    default: return look(L, x, y, z);
+  }
+}
+const FACES = [
+  { n: [1, 0, 0], c: [[1, 0, 1], [1, 0, 0], [1, 1, 0], [1, 1, 1]] }, { n: [-1, 0, 0], c: [[0, 0, 0], [0, 0, 1], [0, 1, 1], [0, 1, 0]] },
+  { n: [0, 1, 0], c: [[0, 1, 1], [1, 1, 1], [1, 1, 0], [0, 1, 0]] }, { n: [0, -1, 0], c: [[0, 0, 0], [1, 0, 0], [1, 0, 1], [0, 0, 1]] },
+  { n: [0, 0, 1], c: [[0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1]] }, { n: [0, 0, -1], c: [[1, 0, 0], [0, 0, 0], [0, 1, 0], [1, 1, 0]] },
+];
+const UVC = [[0, 0], [1, 0], [1, 1], [0, 1]];
+// the two directions along a face, for looking at its corners
+const TAN = [[2, 1], [2, 1], [0, 2], [0, 2], [0, 1], [0, 1]];
+const opaque = (t) => t !== T.EMPTY && t !== T.PIPE && t !== T.PIPETOP && t !== T.WATER && t !== T.COIN && t !== T.LAVA;
+export function buildWorldView(scene, G) {
+  const L = G.L, group = new THREE.Group(); scene.add(group);
+  const A = atlas(), CH = 16, NX = Math.ceil(L.w / CH), NZ = Math.ceil(L.d / CH);
+  const landMat = new THREE.MeshLambertMaterial({ map: A.tex, vertexColors: true });
+  const lavaMat = new THREE.MeshLambertMaterial({ map: TEX.lava(), emissive: '#ff4000', emissiveIntensity: 0.6 });
+  const waterMat = new THREE.MeshLambertMaterial({ color: '#3a9aff', transparent: true, opacity: 0.5, depthWrite: false, side: THREE.DoubleSide });
+  const coinGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.1, 14); coinGeo.rotateX(Math.PI / 2);
+  const coinMat = new THREE.MeshLambertMaterial({ color: '#ffd030', emissive: '#7a5000' });
+  const chunks = new Array(NX * NZ).fill(null), dirty = new Set();
+  const inside = (x, z) => x >= 0 && z >= 0 && x < L.w && z < L.d;
+  const op = (x, y, z) => inside(x, z) && y >= 0 && y < L.h && opaque(L.tiles[(y * L.d + z) * L.w + x]);
+  function buildChunk(cx, cz) {
+    const old = chunks[cz * NX + cx]; if (old) { group.remove(old.g); old.g.traverse((o) => { if (o.geometry && o.geometry !== coinGeo) o.geometry.dispose(); }); }
+    const land = { p: [], n: [], u: [], c: [], i: [] }, lava = { p: [], n: [], u: [], i: [] }, water = { p: [], n: [], i: [] }, coins = [];
+    const x0 = cx * CH, z0 = cz * CH, x1 = Math.min(L.w, x0 + CH), z1 = Math.min(L.d, z0 + CH);
+    for (let y = 0; y < L.h; y++) for (let z = z0; z < z1; z++) for (let x = x0; x < x1; x++) {
+      const t = L.tiles[(y * L.d + z) * L.w + x];
+      if (t === T.EMPTY || t === T.PIPE || t === T.PIPETOP) continue;
+      if (t === T.COIN) { coins.push([x, y, z]); continue; }
+      if (t === T.WATER) {
+        // the water: its surface, and its sides where it meets the air
+        for (let f = 0; f < 6; f++) {
+          if (f === 3) continue; const F = FACES[f], nx = x + F.n[0], ny = y + F.n[1], nz = z + F.n[2];
+          if (!inside(nx, nz)) continue; const nt = tileAt(L, nx, ny, nz); if (nt !== T.EMPTY && nt !== T.COIN) continue;
+          const b = water.p.length / 3; for (const [a, bb, cc] of F.c) water.p.push(x + a, y + bb * 0.88, z + cc);
+          water.n.push(...F.n, ...F.n, ...F.n, ...F.n); water.i.push(b, b + 1, b + 2, b, b + 2, b + 3);
+        }
+        continue;
+      }
+      const isLava = t === T.LAVA;
+      for (let f = 0; f < 6; f++) {
+        const F = FACES[f], nx = x + F.n[0], ny = y + F.n[1], nz = z + F.n[2];
+        if (ny < 0) continue;
+        if (!inside(nx, nz)) { if (f !== 2 && y < 14) continue; }
+        else { const nt = tileAt(L, nx, ny, nz); if (opaque(nt) || (isLava && nt === T.LAVA)) continue; }
+        if (isLava) { if (f !== 2) continue; const b = lava.p.length / 3; F.c.forEach(([a, bb, cc], k) => { lava.p.push(x + a, y + bb * 0.85, z + cc); lava.n.push(...F.n); lava.u.push(UVC[k][0], UVC[k][1]); }); lava.i.push(b, b + 1, b + 2, b, b + 2, b + 3); continue; }
+        const key = faceKey(L, t, x, y, z, f); if (!key) continue; const [u0, v0, u1, v1] = A.uv[key];
+        const b = land.p.length / 3, ao = [], [ta, tb] = TAN[f], sh = [0.86, 0.86, 1, 0.62, 0.92, 0.78][f];
+        F.c.forEach((corner, k) => {
+          land.p.push(x + corner[0], y + corner[1], z + corner[2]); land.n.push(...F.n); land.u.push(UVC[k][0] ? u1 : u0, UVC[k][1] ? v1 : v0);
+          // ambient occlusion: how many of the three blocks round this corner (on the open side) are solid
+          const d = [0, 0, 0], e = [0, 0, 0]; d[ta] = corner[ta] ? 1 : -1; e[tb] = corner[tb] ? 1 : -1;
+          const s1 = op(nx + d[0], ny + d[1], nz + d[2]), s2 = op(nx + e[0], ny + e[1], nz + e[2]), s3 = op(nx + d[0] + e[0], ny + d[1] + e[1], nz + d[2] + e[2]);
+          const v = s1 && s2 ? 0 : 3 - (s1 + s2 + s3); ao.push(v);
+          const k2 = t === T.CLOUD ? 1 : (0.52 + v * 0.16) * sh; land.c.push(k2, k2, k2);
+        });
+        // turn the quad so the darker corners blend the right way
+        if (ao[0] + ao[2] < ao[1] + ao[3]) land.i.push(b + 1, b + 2, b + 3, b + 1, b + 3, b); else land.i.push(b, b + 1, b + 2, b, b + 2, b + 3);
+      }
+    }
+    const g = new THREE.Group();
+    const mk = (d, m, uv = true, col = false) => { if (!d.i.length) return null; const geo = new THREE.BufferGeometry(); geo.setAttribute('position', new THREE.Float32BufferAttribute(d.p, 3)); geo.setAttribute('normal', new THREE.Float32BufferAttribute(d.n, 3)); if (uv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(d.u, 2)); if (col) geo.setAttribute('color', new THREE.Float32BufferAttribute(d.c, 3)); geo.setIndex(d.i); geo.computeBoundingSphere(); const m2 = new THREE.Mesh(geo, m); g.add(m2); return m2; };
+    const lm = mk(land, landMat, true, true); if (lm) { lm.castShadow = true; lm.receiveShadow = true; }
+    mk(lava, lavaMat); const wm = mk(water, waterMat, false); if (wm) wm.renderOrder = 2;
+    let cm = null; if (coins.length) { cm = new THREE.InstancedMesh(coinGeo, coinMat, coins.length); cm.userData.list = coins; cm.castShadow = true; g.add(cm); }
+    group.add(g); chunks[cz * NX + cx] = { g, coins: cm, cx: x0 + CH / 2, cz: z0 + CH / 2 };
+  }
+  // pipes, round
+  for (const p of G.def.pipes || []) group.add(pipeMesh(p.x, p.z, p.base, p.hgt));
+  // the sea beyond the island, and clouds far off
+  const sea = new THREE.Mesh(new THREE.PlaneGeometry(3000, 3000), new THREE.MeshLambertMaterial({ color: '#2a7ad8' })); sea.rotation.x = -Math.PI / 2; sea.position.set(L.w / 2, 16.85, L.d / 2); group.add(sea);
+  const sky = new THREE.Group(), r = mulberry(77); group.add(sky);
+  for (let i = 0; i < 60; i++) { const cg = new THREE.Group(); for (let k = 0; k < 4; k++) { const s = new THREE.Mesh(new THREE.SphereGeometry(3 + r() * 3, 10, 8), cmat('#ffffff', '#c0d0e0')); s.position.set(k * 4, (k % 2) * 1.5, r() * 2); cg.add(s); } cg.position.set(-200 + r() * (L.w + 400), 74 + r() * 30, -200 + r() * (L.d + 400)); sky.add(cg); }
+  // the finish lines with their spinning card boxes, and the checkpoint flags
+  const goals = (G.goals || []).map((gl) => {
+    const gx = gl.x + 0.8, dd = gl.z1 - gl.z0;
+    const line = new THREE.Mesh(new THREE.PlaneGeometry(1, dd), new THREE.MeshLambertMaterial({ map: (() => { const t = TEX.checker().clone(); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(1, dd); t.needsUpdate = true; return t; })() }));
+    line.rotation.x = -Math.PI / 2; line.position.set(gx, gl.y - 0.78, gl.z0 + dd / 2); group.add(line);
+    for (const z of [gl.z0 - 0.2, gl.z1 + 0.2]) { const post = box(0.25, 6, 0.25, '#f8f8f8', gx, gl.y - 0.8 + 3, z); post.castShadow = true; group.add(post); }
+    group.add(box(0.25, 0.25, dd + 0.6, '#f8f8f8', gx, gl.y + 5, gl.z0 + dd / 2));
+    const m = new THREE.Mesh(BOX, [0, 1, 2, 3, 4, 5].map(() => new THREE.MeshLambertMaterial({ map: cardTex('mush'), emissive: '#303030' }))); m.scale.setScalar(1.4); m.position.set(gx, gl.y + 3.6, gl.z + 0.5); m.castShadow = true; group.add(m);
+    return { gl, m, k: '' };
+  });
+  const flags = (G.checks || []).filter((c) => !c.start).map((c) => { const f = new THREE.Group(), cloth = box(0.9, 0.6, 0.05, '#9a9aa8', 0.5, 2.6, 0); f.add(box(0.12, 3, 0.12, '#e8e8e8', 0, 1.5, 0), cloth); f.position.set(c.x + 0.5, c.y, c.z0 - 0.5); f.traverse((o) => { if (o.isMesh) o.castShadow = true; }); group.add(f); return { c, cloth }; });
+  // signs: names over pipes and course starts
+  const signs = (G.def.signs || []).map((s) => { const sp = labelSprite(Array.isArray(s.text) ? s.text : [s.text, s.text]); sp.position.set(s.x, s.y, s.z); group.add(sp); return { s, sp }; });
+  // build what is near first, the rest a few chunks a frame
+  const order = []; for (let cz = 0; cz < NZ; cz++) for (let cx = 0; cx < NX; cx++) order.push([cx, cz]);
+  let queue = order.slice();
+  const api = {
+    group, signs, ready: 0, total: order.length,
+    prime(x, z) { queue = order.filter(([cx, cz]) => !chunks[cz * NX + cx]).sort((a, b) => Math.hypot(a[0] * CH + 8 - x, a[1] * CH + 8 - z) - Math.hypot(b[0] * CH + 8 - x, b[1] * CH + 8 - z)); },
+    // a block changed: rebuild its chunk (and the neighbour's, if it sits on the edge)
+    touch(x, z) { const cx = Math.floor(x / CH), cz = Math.floor(z / CH); dirty.add(cx + ',' + cz); if (x % CH === 0 && cx > 0) dirty.add(cx - 1 + ',' + cz); if (x % CH === CH - 1 && cx < NX - 1) dirty.add(cx + 1 + ',' + cz); if (z % CH === 0 && cz > 0) dirty.add(cx + ',' + (cz - 1)); if (z % CH === CH - 1 && cz < NZ - 1) dirty.add(cx + ',' + (cz + 1)); },
+    work(budgetMs = 8) {
+      const t0 = performance.now();
+      for (const k of dirty) { const [cx, cz] = k.split(',').map(Number); if (chunks[cz * NX + cx]) buildChunk(cx, cz); } dirty.clear();
+      while (queue.length && performance.now() - t0 < budgetMs) { const [cx, cz] = queue.shift(); if (!chunks[cz * NX + cx]) { buildChunk(cx, cz); api.ready++; } }
+    },
+    update(t, cam, info) {
+      const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), sc = new THREE.Vector3(1, 1, 1), p = new THREE.Vector3(); q.setFromAxisAngle(new THREE.Vector3(0, 1, 0), t * 3);
+      for (const c of chunks) { if (!c) continue; const d = Math.hypot(c.cx - cam.x, c.cz - cam.z); c.g.visible = d < 240; if (c.coins && d < 64) { c.coins.userData.list.forEach(([x, y, z], i) => { p.set(x + 0.5, y + 0.5, z + 0.5); m4.compose(p, q, sc); c.coins.setMatrixAt(i, m4); }); c.coins.instanceMatrix.needsUpdate = true; } }
+      lavaMat.emissiveIntensity = 0.5 + Math.sin(t * 4) * 0.15;
+      for (const g of goals) { const k = info.done[g.gl.region] && !g.gl.passed ? 'star' : cardAt(t); if (k !== g.k) { g.k = k; g.m.material.forEach((mm) => { mm.map = cardTex(k); mm.needsUpdate = true; }); } g.m.rotation.y = t * 1.5; }
+      for (const f of flags) { const on = info.respawn === f.c.at; if (f.on !== on) { f.on = on; f.cloth.material = cmat(on ? '#ff4a6a' : '#9a9aa8'); } }
+      for (const s of signs) s.sp.visible = Math.hypot(s.s.x - cam.x, s.s.z - cam.z) < 70;
+      sky.position.x = Math.sin(t * 0.01) * 20;
+    },
+  };
+  return api;
+}
+// a name on a little wooden board, always facing you
+function labelSprite([zh, en]) {
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64; const g = c.getContext('2d');
+  g.fillStyle = '#7a4a1a'; g.fillRect(0, 0, 256, 64); g.fillStyle = '#e8b070'; g.fillRect(4, 4, 248, 56);
+  g.fillStyle = '#3a1a08'; g.textAlign = 'center'; g.font = '900 26px "Noto Sans TC", sans-serif'; g.fillText(zh, 128, 30); g.font = '700 16px "Lilita One", sans-serif'; g.fillText(en, 128, 52);
+  const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthWrite: false })); sp.scale.set(4, 1, 1); return sp;
+}
+// a top-down picture of the whole island for the map screen
+export function worldMapImage(W0) {
+  const c = document.createElement('canvas'); c.width = W0.w; c.height = W0.d; const g = c.getContext('2d'), img = g.createImageData(W0.w, W0.d);
+  const COL = { [T.GROUND]: [90, 190, 80], [T.SAND]: [240, 216, 152], [T.STONE]: [140, 140, 152], [T.SNOW]: [244, 248, 255], [T.LEAVES]: [40, 140, 60], [T.LOG]: [40, 140, 60], [T.WATER]: [50, 130, 230], [T.LAVA]: [255, 90, 20], [T.CLOUD]: [255, 255, 255], [T.PLANK]: [176, 122, 64], [T.WALL]: [248, 240, 220], [T.ROOF]: [232, 48, 42], [T.SPADE]: [42, 154, 74], [T.PIPETOP]: [42, 184, 42], [T.BRICK]: [200, 100, 30], [T.HARD]: [232, 176, 112] };
+  for (let z = 0; z < W0.d; z++) for (let x = 0; x < W0.w; x++) {
+    let col = [42, 122, 216], hgt = 0;
+    for (let y = W0.h - 1; y >= 0; y--) { const t = W0.tiles[(y * W0.d + z) * W0.w + x]; if (t !== T.EMPTY && t !== T.COIN) { col = COL[t] || [200, 180, 140]; hgt = y; break; } }
+    const k = 0.75 + Math.min(0.4, hgt / 120), i = (z * W0.w + x) * 4; img.data[i] = Math.min(255, col[0] * k); img.data[i + 1] = Math.min(255, col[1] * k); img.data[i + 2] = Math.min(255, col[2] * k); img.data[i + 3] = 255;
+  }
+  g.putImageData(img, 0, 0); return c;
+}

@@ -1,1 +1,1 @@
-{ "name": "leaf-leap", "private": true, "type": "module", "scripts": { "test": "node tools/test.mjs" } }
+{"name": "leaf-leap", "private": true, "type": "module", "scripts": {"test": "node tools/test.mjs && node tools/world-test.mjs"}}

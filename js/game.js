@@ -1,8 +1,10 @@
 // LEAF LEAP 3D — the rules of a level in 3D: a grid of blocks, how the hero runs, jumps, pounds and flies, enemies,
 // blocks and power-ups. No DOM: the page draws what is here, and node tests (tools/test.mjs) play it.
 export const T = { EMPTY: 0, GROUND: 1, BRICK: 2, QCOIN: 3, QLEAF: 4, USED: 5, HARD: 6, PIPE: 7, PIPETOP: 8, CLOUD: 9, NOTE: 10, LAVA: 11, Q1UP: 12, QFLOWER: 13, COIN: 14, STONE: 15,
-  WATER: 16, QTANOOKI: 17, QFROG: 18, CANNON: 19, PLANK: 20 };
-const SOLID = new Uint8Array(32); for (const t of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20]) SOLID[t] = 1;
+  WATER: 16, QTANOOKI: 17, QFROG: 18, CANNON: 19, PLANK: 20,
+  // the open world's land: sand, tree trunks and leaves, plaster walls, roof tiles, the spade panel, snow
+  SAND: 21, LOG: 22, LEAVES: 23, WALL: 24, ROOF: 25, SPADE: 26, SNOW: 27 };
+const SOLID = new Uint8Array(32); for (const t of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27]) SOLID[t] = 1;
 export const isSolid = (t) => SOLID[t] === 1;
 export const isQ = (t) => t === T.QCOIN || t === T.QLEAF || t === T.Q1UP || t === T.QFLOWER || t === T.QTANOOKI || t === T.QFROG;
 // powers: 0 small, 1 big, 2 fire, 3 raccoon (the leaf), 4 tanooki suit, 5 frog suit
@@ -55,10 +57,19 @@ export function newRun(def, opts = {}) {
   setPower(hero, opts.pwing && !hasTail({ power: opts.power || 0 }) ? POWER.LEAF : opts.power || 0);
   const cannons = [];
   for (let y = 0; y < L.h; y++) for (let z = 0; z < L.d; z++) for (let x = 0; x < L.w; x++) if (L.tiles[(y * L.d + z) * L.w + x] === T.CANNON) cannons.push({ x, y, z, t: 1 + ((x * 7 + z * 3) % 10) / 4 });
-  return { def, L, hero, enemies: def.ents.filter((e) => ENEMY[e.t]).map(makeEnemy), items: [], fire: [], shots: [], cannons, t: 0, coins: 0, lives: 0, cleared: null, checked: !!opts.checkpoint,
-    god: !!opts.god, ev: [], goal: def.goal ? { x: def.goal[0], y: def.goal[1], z: def.goal[2], w: 1, h: 1, d: 1 } : null, bossDown: false };
+  const spawns = def.ents.filter((e) => ENEMY[e.t]);
+  const G = { def, L, hero, enemies: spawns.map(makeEnemy), items: [], fire: [], shots: [], cannons, t: 0, coins: 0, lives: 0, cleared: null, checked: !!opts.checkpoint,
+    god: !!opts.god, ev: [], goal: def.goal ? { x: def.goal[0], y: def.goal[1], z: def.goal[2], w: 1, h: 1, d: 1 } : null, bossDown: false,
+    world: !!def.world, goals: def.goals || [], checks: def.checks || [], done: { ...(opts.done || {}) }, respawn: opts.at || def.start, spawns, graves: [] };
+  if (opts.at) { hero.x = opts.at[0] + 0.15; hero.y = opts.at[1]; hero.z = opts.at[2] + 0.15; hero.prevY = hero.y; }
+  return G;
 }
 export function setPower(h, p) { h.power = p; h.h = p ? 1.75 : 0.9; }
+// back on your feet at a checkpoint, as you were but small
+export function respawn(G, at, power = 0) {
+  const h = G.hero; Object.assign(h, { x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, vx: 0, vy: 0, vz: 0, dead: false, deadT: 0, inv: 2, pm: 0, flyT: 0, pound: 0, statue: 0, spin: 0, prevY: at[1] }); setPower(h, power);
+  G.fire = []; G.shots = [];
+}
 
 // ---------------------------------------------------------------- enemies
 const ENEMY = {
@@ -72,7 +83,7 @@ const ENEMY = {
   f: () => ({ kind: 'fish', w: 0.8, d: 0.8, h: 0.6, speed: 2.2 }),
 };
 function makeEnemy(e, i) {
-  const o = { id: i, x: e.x + 0.1, y: e.y, z: e.z + 0.1, vy: 0, dx: -1, dz: 0, alive: true, active: false, onGround: false, inv: 0, grace: 0, t: 0, ...ENEMY[e.t]() };
+  const o = { id: i, spawn: e, region: e.region, x: e.x + 0.1, y: e.y, z: e.z + 0.1, vy: 0, dx: -1, dz: 0, alive: true, active: false, onGround: false, inv: 0, grace: 0, t: 0, ...ENEMY[e.t]() };
   if (o.kind === 'plant') { o.x = e.x + 0.6; o.z = e.z + 0.6; o.baseY = e.y; o.y = e.y - o.h; o.phase = 0; }
   return o;
 }
@@ -88,7 +99,7 @@ function hitBoss(G, e, dmg) {
   e.hp -= dmg; e.inv = 1.1; G.ev.push({ t: 'bosshit', x: e.x, y: e.y, z: e.z });
   // knocked back, away from you
   const h = G.hero, dx = e.x - h.x, dz = e.z - h.z, l = Math.hypot(dx, dz) || 1; e.kx = dx / l * 5; e.kz = dz / l * 5;
-  if (e.hp <= 0) { e.alive = false; e.flip = true; e.vy = 10; e.deadT = 0; G.bossDown = true; G.ev.push({ t: 'bossdown', x: e.x, y: e.y, z: e.z }); }
+  if (e.hp <= 0) { e.alive = false; e.flip = true; e.vy = 10; e.deadT = 0; G.bossDown = true; G.ev.push({ t: 'bossdown', x: e.x, y: e.y, z: e.z, region: e.region }); }
 }
 function stepEnemy(G, e, dt) {
   const L = G.L, h = G.hero;
@@ -278,7 +289,8 @@ function stepHero(G, inp, dt) {
   }
   if (h.y < -3) { if (G.god) G.fell = true; die(G); }
   // the checkpoint
-  if (!G.checked && G.def.check && h.x > G.def.check[0]) { G.checked = true; G.ev.push({ t: 'check' }); }
+  if (!G.world && !G.checked && G.def.check && h.x > G.def.check[0]) { G.checked = true; G.ev.push({ t: 'check' }); }
+  if (G.world) { const hz = h.z + h.d / 2; for (const c of G.checks) if (h.x > c.x && h.x < c.x + 2.5 && hz >= c.z0 && hz <= c.z1 && Math.abs(h.y - c.y) < 4 && G.respawn !== c.at) { c.at = c.at || [c.x, c.y, c.z]; if (G.respawn !== c.at) { G.respawn = c.at; if (!c.start) G.ev.push({ t: 'check', region: c.region }); else G.ev.push({ t: 'arrive', region: c.region }); } } }
 }
 
 // ---------------------------------------------------------------- one step of everything
@@ -288,12 +300,17 @@ export function step(G, inp, dt) {
   stepHero(G, G.cleared ? { mx: 1, mz: 0 } : inp, dt);
   // enemies wake up as you get near
   for (const e of G.enemies) {
-    if (!e.active && flatDist(e, h) < 20) e.active = true;
-    if (!e.active) continue;
+    const fd = flatDist(e, h);
+    if (!e.active && fd < 20) e.active = true;
+    if (!e.active || (G.world && fd > 48 && e.alive)) continue;
     if (!e.alive) { e.deadT += dt; if (e.flip) { e.vy -= 40 * dt; e.y += e.vy * dt; } continue; }
     stepEnemy(G, e, dt);
   }
+  if (G.world) for (const e of G.enemies) if (!e.alive && e.deadT >= 1.5 && e.kind !== 'boss') G.graves.push({ spawn: e.spawn, t: G.t });
   G.enemies = G.enemies.filter((e) => e.alive || e.deadT < 1.5);
+  if (G.world && G.graves.length && Math.floor(G.t) !== Math.floor(G.t - dt)) {
+    G.graves = G.graves.filter((g) => { const far = Math.hypot(g.spawn.x - h.x, g.spawn.z - h.z) > 34; if (G.t - g.t > 50 && far) { G.enemies.push(makeEnemy(g.spawn, G.enemies.length + 1000)); return false; } return true; });
+  }
   // you and the enemies
   if (!h.dead && !G.cleared) for (const e of G.enemies) {
     if (!e.alive || !e.active || (e.kind === 'plant' && !e.out) || !overlap(h, e)) continue;
@@ -340,7 +357,7 @@ export function step(G, inp, dt) {
   // cannons on the airship fire balls towards you when you are near
   for (const c of G.cannons || []) {
     c.t -= dt; const dx = h.x + h.w / 2 - (c.x + 0.5);
-    if (c.t <= 0 && Math.abs(dx) < 16 && Math.abs(dx) > 2 && !h.dead) {
+    if (c.t <= 0 && Math.abs(dx) < 16 && Math.abs(dx) > 2 && Math.abs(h.z - c.z) < 10 && Math.abs(h.y - c.y) < 8 && !h.dead) {
       c.t = 3.2; const dir = Math.sign(dx);
       if (!isSolid(tileAt(G.L, c.x + dir, c.y, c.z))) { G.shots.push({ kind: 'ball', x: c.x + 0.5 + dir * 0.6 - 0.3, y: c.y + 0.2, z: c.z + 0.2, w: 0.6, h: 0.6, d: 0.6, vx: dir * 4.5, vz: 0 }); G.ev.push({ t: 'cannon', x: c.x, y: c.y, z: c.z }); }
     }
@@ -354,7 +371,8 @@ export function step(G, inp, dt) {
   G.shots = G.shots.filter((s) => !s.gone);
   // the goal: a box of spinning cards over a finish line across the course; crossing it ends the level with whichever card shows
   if (G.goal && !G.cleared && !h.dead && h.x + h.w > G.goal.x + 0.3 && h.y < G.goal.y + 7) { G.cleared = cardAt(G.t); G.ev.push({ t: 'clear', card: G.cleared }); }
-  if (G.bossDown && !G.cleared && !h.dead) { G.cleared = 'star'; G.ev.push({ t: 'clear', card: 'star', boss: true }); }
+  if (G.bossDown && !G.cleared && !h.dead && !G.world) { G.cleared = 'star'; G.ev.push({ t: 'clear', card: 'star', boss: true }); }
+  if (G.world && !h.dead) { const hz = h.z + h.d / 2; for (const g of G.goals) if (h.x + h.w > g.x + 0.3 && h.x < g.x + 2 && hz >= g.z0 && hz <= g.z1 && h.y < g.y + 7 && h.y > g.y - 4 && !g.passed) { g.passed = true; const card = cardAt(G.t); G.ev.push({ t: 'clear', card, region: g.region, again: !!G.done[g.region] }); G.done[g.region] = true; } else if (h.x + h.w < g.x - 2 || h.x > g.x + 6) g.passed = false; }
   return G.ev;
 }
 function kick(G, e) {
