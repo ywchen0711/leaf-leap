@@ -61,6 +61,7 @@ button.focus { outline: 4px solid var(--gold); outline-offset: 3px; }
   #t-b { right: 110px; bottom: calc(80px + env(safe-area-inset-bottom, 0px)); background: rgba(255, 200, 40, 0.9) !important; }
   #t-c { right: 40px; bottom: calc(206px + env(safe-area-inset-bottom, 0px)); width: 60px !important; height: 60px !important; font-size: 24px !important; }
   #t-swap { right: 70px; top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; font-size: 20px !important; }
+  #t-suit { right: 126px; top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; font-size: 20px !important; }
   #t-pause { right: 14px; top: calc(14px + env(safe-area-inset-top, 0px)); width: 46px; height: 46px; font-size: 14px !important; }
   #bar { bottom: auto; top: calc(8px + env(safe-area-inset-top, 0px)); font-size: 9px; padding: 4px 6px; gap: 6px; }
   #cards span { width: 26px; height: 32px; } #cards img { width: 22px; height: 22px; }
@@ -112,3 +113,13 @@ button.focus { outline: 4px solid var(--gold); outline-offset: 3px; }
 .bro b { font-size: 22px; } .bro small { font-size: 12px; opacity: 0.85; }
 .bro.josh { background: linear-gradient(#ff7a6a, #e84a3a); color: #fff; } .bro.jasper { background: linear-gradient(#6ad87a, #3aa84a); color: #fff; }
 .bro.on { opacity: 1; transform: scale(1.07); border-color: #ffd030; box-shadow: 0 0 0 3px #fff, 0 6px 18px rgba(0, 0, 0, 0.3); }
+
+/* ---------- air under the sea, the wardrobe ---------- */
+#air { position: fixed; left: 50%; top: 22%; transform: translateX(-50%); z-index: 6; padding: 6px 12px; border-radius: 14px; background: rgba(10, 40, 90, 0.6); color: #e8f6ff; font: 900 14px "Noto Sans TC", sans-serif; display: flex; gap: 5px; align-items: center; pointer-events: none; }
+#air i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #bfe8ff; background: transparent; }
+#air i.on { background: radial-gradient(circle at 35% 35%, #ffffff, #7ad0ff 60%, #3a8ae8); }
+#air.low { animation: airblink 0.5s infinite alternate; } @keyframes airblink { to { background: rgba(160, 30, 30, 0.7); } }
+.suits .itembtn.on { outline: 3px solid #ffd030; }
+.sw { display: inline-block; width: 30px; height: 30px; border-radius: 8px; background: #ccc; border: 2px solid #222; }
+.s-leaf { background: linear-gradient(#e8a04a, #b8783a); } .s-frog { background: linear-gradient(#6ae86a, #2aa83a); } .s-lava { background: linear-gradient(#ffd030, #ff5a1a 55%, #3a2a2a); }
+.s-climb { background: linear-gradient(#e84a4a 30%, #5a8a3a 30%, #4a6a2a); } .s-tanooki { background: linear-gradient(#c8884a, #7a4418); } .s-gold { background: linear-gradient(135deg, #fff6b0, #ffd030 45%, #c89000); }

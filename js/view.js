@@ -1,6 +1,6 @@
 // LEAF LEAP 3D — what you see: pixel-art blocks, round pipes, scenery for each theme, the hero, enemies, items and effects.
 import * as THREE from 'three';
-import { T, cardAt, tileAt, isSolid } from './game.js?v=7';
+import { T, cardAt, tileAt, isSolid } from './game.js?v=8';
 
 // ---------------------------------------------------------------- pixel textures (16 × 16, drawn sharp)
 const cache = new Map();
@@ -222,14 +222,36 @@ const brow = (x, y, z, rot, s = 1, c = '#141014') => { const b = pill(0.035 * s,
 // a wide open grin: dark mouth, a red tongue, a row of white teeth
 function grin(y, z, w = 1) { const g = new THREE.Group(); g.add(flat(ball(0.1 * w, '#3a0a10', 0, 0, 0, 1.3, 0.75, 0.4)), flat(ball(0.06 * w, '#e8505a', 0, -0.035 * w, 0.02, 1.2, 0.5, 0.4)), flat(tbox(0.18 * w, 0.03 * w, 0.03, '#ffffff', 0, 0.045 * w, 0.03))); g.position.set(0, y, z); return g; }
 
-// the two brothers. Josh, the older one: spiky dark hair under a yellow headband, a red jacket, blue trousers.
-// Jasper, the younger one: a little smaller, a mop of soft brown hair with a curl on top under a backwards blue cap,
-// a green jacket and orange shorts. Both cute and round: big heads, big sparkly eyes, rosy cheeks, round mitts.
+// the two brothers, drawn like children in a picture book: big round heads, large shining eyes with a dark lash line,
+// a small smile, rosy cheeks, a jacket open over a white T-shirt, shorts and chunky sneakers.
+// Josh, the big brother: dark hair in swept-back spikes under a yellow headband, a red jacket, blue shorts.
+// Jasper, the little brother: a little smaller, soft brown hair with a side fringe and a curl on top, a blue cap worn
+// backwards, a green jacket, orange shorts.
 export const BROS = {
-  josh: { name: 'Josh', size: 1, hair: '#3a2014', band: '#ffd030', shirt: '#ff5a4a', alls: '#3a6ae0', fire: '#ff5a4a', eye: '#3a2a1a', skin: '#ffdcbc' },
-  jasper: { name: 'Jasper', size: 0.9, hair: '#b0702a', band: '#3a8aff', shirt: '#4ac85a', alls: '#ffa830', fire: '#4ac85a', eye: '#2a5ad8', skin: '#ffe2c4' },
+  josh: { name: 'Josh', size: 1, hair: '#3a2418', brow: '#2a1810', band: '#ffd030', shirt: '#f0503e', alls: '#3a62d8', fire: '#f0503e', eye: '#6a3a1a', skin: '#ffdcc0', shoe: '#e83a3a' },
+  jasper: { name: 'Jasper', size: 0.9, hair: '#b8783a', brow: '#7a4a20', band: '#3a86f0', shirt: '#46c25a', alls: '#ffa232', fire: '#46c25a', eye: '#2a6ad8', skin: '#ffe4ca', shoe: '#3a7ae8' },
 };
-const suit = (B, p) => (p === 2 ? { cap: B.band, shirt: '#ffffff', alls: B.fire } : p === 4 ? { cap: B.band, shirt: '#b0703a', alls: '#7a4418', skin: '#f8d4a8' } : p === 5 ? { cap: B.band, shirt: '#4ad84a', alls: '#2aa83a', skin: '#ffe4c0' } : { cap: B.band, shirt: B.shirt, alls: B.alls });
+// what each power or suit wears: [jacket, shorts]
+const suit = (B, p) => ({ 2: ['#ffffff', B.fire], 3: ['#82d052', B.alls], 4: ['#b0703a', '#7a4418'], 5: ['#4ad84a', '#2aa83a'], 6: ['#ff6a1a', '#3a2a2a'], 7: ['#5a8a3a', '#7a5a3a'], 8: ['#ffd030', '#fff0b0'] }[p] || [B.shirt, B.alls]);
+const lighter = (hex) => shade(hex, 1.45);
+// a picture-book eye: a tall white, a big iris lighter at the bottom, a dark pupil, two glints and a lash line over the top
+function kidEye(x, y, z, s, iris, side) {
+  const g = new THREE.Group();
+  g.add(ball(0.1 * s, '#ffffff', 0, 0, 0, 0.8, 1.12, 0.42));
+  g.add(flat(ball(0.078 * s, iris, 0, -0.01 * s, 0.032 * s, 0.82, 1.06, 0.4)), flat(ball(0.045 * s, lighter(iris), 0, -0.045 * s, 0.044 * s, 0.85, 0.55, 0.3)));
+  g.add(flat(ball(0.046 * s, '#140c0a', 0, 0, 0.048 * s, 0.82, 1.06, 0.36)), flat(ball(0.026 * s, '#ffffff', 0.026 * s * side, 0.036 * s, 0.058 * s, 1, 1, 0.5)), flat(ball(0.012 * s, '#ffffff', -0.024 * s * side, -0.042 * s, 0.058 * s, 1, 1, 0.5)));
+  const lash = new THREE.Mesh(new THREE.TorusGeometry(0.083 * s, 0.016 * s, 6, 18, Math.PI), tmat('#1a0e0c')); lash.scale.set(1, 1.2, 0.5); lash.position.z = 0.02 * s; flat(lash); g.add(lash);
+  const tick = flat(pill(0.012 * s, 0.05 * s, '#1a0e0c', 0.085 * s * side, 0.055 * s, 0.025 * s)); tick.rotation.z = -side * 0.9; g.add(tick);
+  g.position.set(x, y, z); g.rotation.y = side * 0.36; return g;
+}
+// a small closed smile, and the open mouth it becomes when he is excited
+function kidMouth(y, z) {
+  const g = new THREE.Group(); g.position.set(0, y, z);
+  const arc = flat(new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 14, Math.PI), tmat('#6a2a2a'))); arc.rotation.z = Math.PI; g.add(arc);
+  const open = new THREE.Group(); open.add(flat(dome(0.06, '#7a1a22', 0, 0, 0, 1.15, 1.1, 0.4)), flat(ball(0.032, '#ff7a8a', 0, -0.028, 0.012, 1.3, 0.6, 0.4))); open.children[0].rotation.x = Math.PI; open.visible = false; g.add(open);
+  g.userData = { arc, open }; return g;
+}
+// the monsters' cute eyes and smiles
 // a cute eye: a big rounded white, a large coloured iris, a dark pupil, two glints
 function cuteEye(x, y, z, s = 1, iris = '#3a2a1a') {
   const g = new THREE.Group(); g.add(ball(0.105 * s, '#ffffff', 0, 0, 0, 0.82, 1.08, 0.45), flat(ball(0.07 * s, iris, 0, -0.012 * s, 0.03 * s, 0.85, 1.05, 0.42)), flat(ball(0.04 * s, '#141014', 0, -0.012 * s, 0.045 * s, 0.85, 1.05, 0.4)),
@@ -239,59 +261,63 @@ function cuteEye(x, y, z, s = 1, iris = '#3a2a1a') {
 const smile = (y, z, w = 1) => { const g = new THREE.Group(); g.add(flat(ball(0.07 * w, '#5a1a20', 0, 0, 0, 1.2, 0.6, 0.35)), flat(ball(0.045 * w, '#ff7a8a', 0, -0.02 * w, 0.02, 1.1, 0.5, 0.35))); g.position.set(0, y, z); return g; };
 export function makeHero(kind = 'josh') {
   const B = BROS[kind] || BROS.josh, g = new THREE.Group(), inner = new THREE.Group(); g.add(inner);
-  const parts = {};
+  const parts = {}, HC = B.hair;
   const legL = new THREE.Group(), legR = new THREE.Group(), armL = new THREE.Group(), armR = new THREE.Group();
-  legL.position.set(-0.13, 0.42, 0); legR.position.set(0.13, 0.42, 0); armL.position.set(-0.3, 0.9, 0); armR.position.set(0.3, 0.9, 0);
-  // stubby legs and round little shoes
-  parts.legLm = pill(0.12, 0.24, B.alls, 0, -0.13, 0); parts.legRm = pill(0.12, 0.24, B.alls, 0, -0.13, 0);
-  parts.shoeL = ball(0.16, '#8a4a1e', 0, -0.33, 0.05, 1, 0.75, 1.3); parts.shoeR = ball(0.16, '#8a4a1e', 0, -0.33, 0.05, 1, 0.75, 1.3);
-  legL.add(parts.legLm, parts.shoeL, flat(ball(0.05, '#ffffff', 0, -0.27, 0.18))); legR.add(parts.legRm, parts.shoeR, flat(ball(0.05, '#ffffff', 0, -0.27, 0.18)));
-  // short arms, big round mitts, a wristband
-  parts.armLm = pill(0.1, 0.22, B.shirt, 0, -0.1, 0); parts.armRm = pill(0.1, 0.22, B.shirt, 0, -0.1, 0);
-  parts.bandL = disc(0.105, 0.06, B.band, 0, -0.23, 0); parts.bandR = disc(0.105, 0.06, B.band, 0, -0.23, 0);
-  for (const [a, m, b] of [[armL, parts.armLm, parts.bandL], [armR, parts.armRm, parts.bandR]]) a.add(m, b, ball(0.14, '#ffffff', 0, -0.34, 0.01), ball(0.06, '#ffffff', 0, -0.3, 0.12));
-  // a round little body
-  parts.shirt = ball(0.27, B.shirt, 0, 0.86, 0, 1.08, 0.78, 0.9); parts.body = ball(0.27, B.alls, 0, 0.6, 0, 1.05, 0.68, 0.9);
-  parts.strapL = disc(0.29, 0.06, '#5a3418', 0, 0.71, 0); parts.strapL.scale.z = 0.25; parts.strapR = flat(ball(0.045, '#ffd030', 0, 0.71, 0.24));
-  // the head: very big and round, low sparkly eyes, rosy cheeks, a small smile
-  const head = new THREE.Group(); head.position.y = 1.3;
-  parts.face = ball(0.44, B.skin, 0, 0, 0, 1, 0.94, 0.96);
-  const eyes = new THREE.Group(); eyes.add(cuteEye(-0.15, -0.02, 0.36, 1.4, B.eye), cuteEye(0.15, -0.02, 0.36, 1.4, B.eye));
-  const brows = new THREE.Group(); brows.add(brow(-0.15, 0.16, 0.39, 0.12, 0.75, B.hair === '#b0702a' ? '#7a4a1a' : '#2a1410'), brow(0.15, 0.16, 0.39, -0.12, 0.75, B.hair === '#b0702a' ? '#7a4a1a' : '#2a1410'));
-  const mouth = smile(-0.19, 0.38, 1), cheeks = new THREE.Group(); cheeks.add(flat(ball(0.075, '#ff8a9a', -0.27, -0.14, 0.31, 1, 0.6, 0.3)), flat(ball(0.075, '#ff8a9a', 0.27, -0.14, 0.31, 1, 0.6, 0.3)));
-  const nose = flat(ball(0.03, '#f8a88a', 0, -0.09, 0.42));
-  const earsH = new THREE.Group(); earsH.add(ball(0.08, B.skin, -0.43, -0.04, 0, 0.6, 1, 0.8), ball(0.08, B.skin, 0.43, -0.04, 0, 0.6, 1, 0.8));
-  const hair = new THREE.Group(), HC = B.hair;
+  legL.position.set(-0.11, 0.4, 0); legR.position.set(0.11, 0.4, 0); armL.position.set(-0.27, 0.86, 0); armR.position.set(0.27, 0.86, 0);
+  // short legs and chunky sneakers with white soles
+  parts.legLm = pill(0.1, 0.22, B.alls, 0, -0.12, 0); parts.legRm = pill(0.1, 0.22, B.alls, 0, -0.12, 0);
+  parts.shoeL = ball(0.14, B.shoe, 0, -0.29, 0.04, 1, 0.68, 1.35); parts.shoeR = ball(0.14, B.shoe, 0, -0.29, 0.04, 1, 0.68, 1.35);
+  for (const [lg, m, sh] of [[legL, parts.legLm, parts.shoeL], [legR, parts.legRm, parts.shoeR]]) lg.add(m, sh, ball(0.145, '#ffffff', 0, -0.345, 0.04, 1.02, 0.3, 1.38), flat(ball(0.04, '#ffffff', 0, -0.21, 0.17, 1.3, 0.6, 0.6)));
+  // short arms in the jacket's sleeves, a cuff, little hands
+  parts.armLm = pill(0.085, 0.2, B.shirt, 0, -0.1, 0); parts.armRm = pill(0.085, 0.2, B.shirt, 0, -0.1, 0);
+  parts.bandL = disc(0.09, 0.05, B.band, 0, -0.22, 0); parts.bandR = disc(0.09, 0.05, B.band, 0, -0.22, 0);
+  for (const [a, m, b] of [[armL, parts.armLm, parts.bandL], [armR, parts.armRm, parts.bandR]]) a.add(m, b, ball(0.1, B.skin, 0, -0.3, 0.01), ball(0.045, B.skin, 0, -0.27, 0.08));
+  // a round little body: the jacket, open over a white T-shirt, and the shorts
+  parts.shirt = ball(0.25, B.shirt, 0, 0.74, 0, 1.02, 1.0, 0.85); parts.body = ball(0.245, B.alls, 0, 0.5, 0, 1.03, 0.58, 0.88);
+  parts.strapL = ball(0.15, '#ffffff', 0, 0.93, 0.05, 1.25, 0.42, 1.05); parts.strapR = flat(pill(0.018, 0.26, shade(B.shirt, 0.72), 0, 0.72, 0.21));
+  // the head: big and round, eyes set low and wide, a tiny nose, rosy cheeks
+  const head = new THREE.Group(); head.position.y = 1.28;
+  parts.face = ball(0.43, B.skin, 0, 0, 0, 1.04, 0.95, 0.97);
+  const eyes = new THREE.Group(); eyes.add(kidEye(-0.16, -0.05, 0.335, 1.3, B.eye, -1), kidEye(0.16, -0.05, 0.335, 1.3, B.eye, 1));
+  const brows = new THREE.Group(); for (const sd of [-1, 1]) { const b = flat(pill(0.02, 0.085, B.brow, sd * 0.16, 0.12, 0.395)); b.rotation.z = Math.PI / 2 - sd * 0.12; brows.add(b); }
+  const mouth = kidMouth(-0.215, 0.39), cheeks = new THREE.Group(); cheeks.add(flat(ball(0.07, '#ff9aa6', -0.27, -0.16, 0.3, 1.1, 0.55, 0.3)), flat(ball(0.07, '#ff9aa6', 0.27, -0.16, 0.3, 1.1, 0.55, 0.3)));
+  const nose = flat(ball(0.026, '#f6a890', 0, -0.13, 0.415, 1.2, 0.8, 0.6));
+  const earsH = new THREE.Group(); earsH.add(ball(0.075, B.skin, -0.44, -0.05, -0.02, 0.6, 1, 0.8), ball(0.075, B.skin, 0.44, -0.05, -0.02, 0.6, 1, 0.8));
+  const hair = new THREE.Group();
+  const crown = dome(0.462, HC, 0, 0.01, -0.03, 1.05, 1, 1.05); crown.rotation.x = -0.45; hair.add(crown, ball(0.4, HC, 0, -0.07, -0.13, 1.04, 0.92, 0.9));
+  const lock = (x, y, z, dx, dy, dz, r, len, c = HC) => { const m = cone(r, len, c, 0, 0, 0), d = new THREE.Vector3(dx, dy, dz).normalize(); m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), d); m.position.set(x + d.x * len / 2, y + d.y * len / 2, z + d.z * len / 2); return m; };
   if (kind === 'jasper') {
-    // a soft round mop with a curl on top, under a backwards cap
-    hair.add(ball(0.45, HC, 0, 0.09, -0.06, 1.04, 0.9, 1.04));
-    for (const [x, z] of [[-0.3, 0.26], [-0.12, 0.36], [0.08, 0.37], [0.27, 0.27]]) hair.add(ball(0.12, HC, x, 0.17, z, 1, 0.75, 0.8));
-    for (const [x, y, z] of [[-0.38, -0.08, -0.05], [0.38, -0.08, -0.05], [0, -0.06, -0.38]]) hair.add(ball(0.15, HC, x, y, z, 0.7, 1, 0.8));
-    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.1, 0.035, 8, 16, Math.PI * 1.5), tmat(HC)); curl.position.set(0.02, 0.56, 0.02); curl.rotation.set(0, 0, 0.8); hair.add(curl);
-    parts.cap = dome(0.5, B.band, 0, 0.15, -0.05, 1.03, 0.8, 1.03); parts.brim = new THREE.Group(); const br = disc(0.28, 0.05, B.band, 0, 0.16, -0.46); br.scale.z = 0.18; parts.brim.add(br); parts.brim.add(ball(0.06, '#ffffff', 0, 0.56, -0.05));
+    // a soft side-swept fringe, locks over the ears, a curl springing up on top
+    const fr = ball(0.3, HC, 0.06, 0.2, 0.27, 1.2, 0.42, 0.62); fr.rotation.set(0.5, 0, -0.28); hair.add(fr);
+    const fr2 = ball(0.14, HC, -0.2, 0.19, 0.28, 0.9, 0.5, 0.6); fr2.rotation.set(0.55, 0, 0.35); hair.add(fr2);
+    for (const sd of [-1, 1]) hair.add(ball(0.1, HC, sd * 0.4, -0.04, -0.04, 0.5, 1.3, 0.8), ball(0.09, HC, sd * 0.33, -0.2, -0.12, 0.6, 1, 0.8));
+    const curl = new THREE.Mesh(new THREE.TorusGeometry(0.075, 0.026, 8, 16, Math.PI * 1.6), tmat(HC)); curl.position.set(0.05, 0.53, 0.14); curl.rotation.set(0.2, 0.3, 0.6); hair.add(curl);
+    // the cap, worn backwards, sits on the back of the head
+    parts.cap = new THREE.Group(); const cd = dome(0.37, B.band, 0, 0, 0, 1.08, 0.72, 1.08); parts.cap.add(cd, ball(0.045, '#ffffff', 0, 0.27, 0)); parts.cap.position.set(0, 0.27, -0.1); parts.cap.rotation.x = -0.55;
+    parts.brim = new THREE.Group(); const br = disc(0.22, 0.04, B.band, 0, 0, 0); br.scale.z = 0.16; parts.brim.add(br); parts.brim.position.set(0, 0.18, -0.43); parts.brim.rotation.x = 0.3;
   } else {
-    // a crown of soft spikes, a fringe, a headband with flying tails
-    hair.add(ball(0.45, HC, 0, 0.1, -0.07, 1.04, 0.9, 1.03), ball(0.4, HC, 0, -0.06, -0.15, 1.04, 0.9, 0.85));
-    for (const [a, b, len] of [[0, 0.3, 0.42], [0.75, 0.75, 0.38], [-0.75, 0.75, 0.38], [1.55, 0.95, 0.36], [-1.55, 0.95, 0.36], [2.35, 0.85, 0.36], [-2.35, 0.85, 0.36], [3.14, 0.75, 0.4]]) {
-      const sp = ball(0.13, HC, 0, 0, 0, 0.75, len / 0.13 / 2, 0.75), dir = new THREE.Vector3(Math.sin(a) * Math.sin(b), Math.cos(b), Math.cos(a) * Math.sin(b) * 0.9 - 0.15).normalize();
-      sp.position.copy(dir.clone().multiplyScalar(0.44)).add(new THREE.Vector3(0, 0.08, -0.04)); sp.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), dir); hair.add(sp);
-    }
-    for (const x of [-0.2, -0.07, 0.07, 0.2]) { const f = ball(0.08, HC, x, 0.2, 0.36, 1, 1.5, 0.7); f.rotation.x = 0.6; f.rotation.z = -x * 2; hair.add(f); }
-    parts.cap = new THREE.Mesh(new THREE.TorusGeometry(1, 0.07, 6, 28), tmat(B.band)); parts.cap.scale.set(0.44, 0.44, 1); parts.cap.rotation.x = Math.PI / 2 + 0.12; parts.cap.position.set(0, 0.15, 0.0);
-    parts.brim = new THREE.Group(); parts.brim.add(tbox(0.07, 0.22, 0.04, B.band, -0.06, 0.08, -0.47), tbox(0.07, 0.26, 0.04, B.band, 0.06, 0.06, -0.48)); parts.brim.children.forEach((c, i) => { c.rotation.z = i ? -0.4 : 0.4; });
+    // swept-back spikes, three pointed locks over the forehead
+    for (const [x, y, z, dx, dy, dz, r, len] of [[0, 0.38, 0.02, 0, 1, -0.35, 0.15, 0.44], [0.2, 0.34, 0, 0.55, 0.9, -0.4, 0.13, 0.38], [-0.2, 0.34, 0, -0.55, 0.9, -0.4, 0.13, 0.38], [0.12, 0.26, -0.26, 0.35, 0.55, -0.9, 0.14, 0.42], [-0.12, 0.26, -0.26, -0.35, 0.55, -0.9, 0.14, 0.42], [0, 0.1, -0.36, 0, 0.2, -1, 0.15, 0.36], [0.34, 0.14, -0.12, 1, 0.35, -0.4, 0.11, 0.3], [-0.34, 0.14, -0.12, -1, 0.35, -0.4, 0.11, 0.3]]) hair.add(lock(x, y, z, dx, dy, dz, r, len));
+    for (const [x, dx] of [[-0.17, -0.25], [0.02, 0.05], [0.19, 0.3]]) hair.add(lock(x, 0.32, 0.3, dx, -0.75, 0.6, 0.085, 0.24));
+    // the headband round his forehead, its two tails flying out behind
+    parts.cap = new THREE.Mesh(new THREE.TorusGeometry(1, 0.062, 8, 32), tmat(B.band)); parts.cap.scale.set(0.445, 0.445, 0.9); parts.cap.rotation.x = Math.PI / 2 - 0.42; parts.cap.position.set(0, 0.09, -0.02);
+    parts.brim = new THREE.Group(); parts.brim.position.set(0, 0.0, -0.44); for (const sd of [-1, 1]) { const t = tbox(0.07, 0.26, 0.035, B.band, sd * 0.05, -0.1, 0); t.rotation.z = sd * 0.35; parts.brim.add(t); }
   }
   head.add(parts.face, eyes, brows, nose, mouth, cheeks, earsH, hair, parts.cap, parts.brim);
-  // the leaf look: round raccoon ears and a striped tail
-  const ears = new THREE.Group(); ears.add(ball(0.13, '#b8783a', -0.28, 0.5, -0.04, 1, 1.1, 0.5), ball(0.13, '#b8783a', 0.28, 0.5, -0.04, 1, 1.1, 0.5), flat(ball(0.065, '#ffc8a0', -0.28, 0.5, 0.02, 1, 1.1, 0.5)), flat(ball(0.065, '#ffc8a0', 0.28, 0.5, 0.02, 1, 1.1, 0.5))); head.add(ears);
-  const tail = new THREE.Group(); tail.position.set(0, 0.58, -0.24); for (let i = 0; i < 5; i++) tail.add(ball(0.15 - i * 0.005, i % 2 ? '#5a3418' : '#d8985a', 0, -i * 0.04, -i * 0.14)); tail.rotation.x = -0.6;
-  // the frog suit: a green hood with big round eyes on top
-  const frogEyes = new THREE.Group(); frogEyes.add(dome(0.47, '#4ad84a', 0, 0.02, -0.02, 1.02, 1.05, 1.02)); for (const x of [-0.19, 0.19]) frogEyes.add(ball(0.15, '#4ad84a', x, 0.42, 0.1), cuteEye(x, 0.44, 0.2, 1.2, '#2a8a2a')); head.add(frogEyes);
-  inner.add(legL, legR, armL, armR, parts.body, parts.shirt, parts.strapL, parts.strapR, head, tail);
-  parts.hair = hair; ink(g, 0.02); g.scale.setScalar(B.size);
-  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, frogEyes, eyes, brows, mouth, parts, phase: 0, power: -1, blink: 0, bro: B, kind };
+  // the suits' pieces: round raccoon ears and a striped tail; the frog hood; the lava hood with its flames; the climber's beanie and backpack
+  const ears = new THREE.Group(); ears.add(ball(0.13, '#b8783a', -0.28, 0.5, -0.06, 1, 1.1, 0.5), ball(0.13, '#b8783a', 0.28, 0.5, -0.06, 1, 1.1, 0.5), flat(ball(0.065, '#ffc8a0', -0.28, 0.5, 0, 1, 1.1, 0.5)), flat(ball(0.065, '#ffc8a0', 0.28, 0.5, 0, 1, 1.1, 0.5))); head.add(ears);
+  const tail = new THREE.Group(); tail.position.set(0, 0.55, -0.22); for (let i = 0; i < 5; i++) tail.add(ball(0.15 - i * 0.005, i % 2 ? '#5a3418' : '#d8985a', 0, -i * 0.04, -i * 0.14)); tail.rotation.x = -0.6;
+  const frogEyes = new THREE.Group(); { const hd = dome(0.475, '#4ad84a', 0, 0.0, -0.02, 1.04, 1.02, 1.04); hd.rotation.x = -0.35; frogEyes.add(hd); for (const x of [-0.19, 0.19]) frogEyes.add(ball(0.15, '#4ad84a', x, 0.44, 0.06), kidEye(x, 0.46, 0.17, 1.15, '#2a8a2a', Math.sign(x))); } head.add(frogEyes);
+  const lavaHood = new THREE.Group(); { const hd = dome(0.48, '#ff6a1a', 0, 0, -0.02, 1.05, 1.03, 1.05); hd.rotation.x = -0.4; const rim = new THREE.Mesh(new THREE.TorusGeometry(1, 0.06, 8, 30), tmat('#3a2a2a')); rim.scale.set(0.47, 0.47, 0.9); rim.rotation.x = Math.PI / 2 - 0.4; rim.position.set(0, 0.0, -0.02); lavaHood.add(hd, rim); for (const [x, hh, c] of [[-0.16, 0.26, '#ffd030'], [0, 0.36, '#ffe870'], [0.16, 0.26, '#ffd030']]) { const f = cone(0.09, hh, c, x, 0.5 + hh / 2, -0.06); f.material = tmat(c, '#8a4a00'); lavaHood.add(f); } } head.add(lavaHood);
+  const beanie = new THREE.Group(); { const hd = dome(0.475, '#e84a4a', 0, 0.02, -0.02, 1.05, 1.0, 1.05); hd.rotation.x = -0.42; const fold = new THREE.Mesh(new THREE.TorusGeometry(1, 0.09, 8, 30), tmat('#ffffff')); fold.scale.set(0.47, 0.47, 1); fold.rotation.x = Math.PI / 2 - 0.42; fold.position.set(0, 0.03, -0.02); beanie.add(hd, fold, ball(0.1, '#ffffff', 0, 0.5, -0.18)); } head.add(beanie);
+  const pack = new THREE.Group(); pack.add(tbox(0.36, 0.4, 0.16, '#8a5a32', 0, 0.76, -0.27), tbox(0.3, 0.14, 0.04, '#a8743e', 0, 0.68, -0.36), disc(0.08, 0.36, '#3a6ae0', 0, 1.0, -0.27)); pack.children[2].rotation.z = Math.PI / 2;
+  const crownG = new THREE.Group(); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; const c = cone(0.05, 0.14, '#ffd030', Math.sin(a) * 0.17, 0.56, Math.cos(a) * 0.17 - 0.04); c.material = tmat('#ffd030', '#6a4a00'); crownG.add(c); } { const ring = new THREE.Mesh(new THREE.TorusGeometry(0.18, 0.035, 6, 20), tmat('#ffd030', '#6a4a00')); ring.rotation.x = Math.PI / 2; ring.position.set(0, 0.5, -0.04); crownG.add(ring); } head.add(crownG);
+  inner.add(legL, legR, armL, armR, parts.body, parts.shirt, parts.strapL, parts.strapR, head, tail, pack);
+  parts.hair = hair; ink(g, 0.022); g.scale.setScalar(B.size);
+  g.userData = { inner, legL, legR, armL, armR, head, ears, tail, frogEyes, lavaHood, beanie, pack, crownG, eyes, brows, mouth, parts, phase: 0, power: -1, blink: 0, bro: B, kind };
   return g;
 }
-const paint = (m, c) => { if (m.isMesh) m.material = tmat(c); else m.children.forEach((k) => { if (k.isMesh && !k.userData.outline && k.material !== undefined && !k.userData.noInk) k.material = tmat(c); }); };
+const paint = (m, c, em) => { if (m.isMesh) m.material = tmat(c, em); else m.children.forEach((k) => { if (k.isMesh && !k.userData.outline && !k.userData.noInk) k.material = tmat(c, em); }); };
 export function poseHero(m, h, dt, t) {
   const u = m.userData, B = u.bro || BROS.josh;
   const lookKey = h.statue > 0 ? 'stone' : h.power;
@@ -299,41 +325,46 @@ export function poseHero(m, h, dt, t) {
     u.power = lookKey;
     u.inner.traverse((o) => { if (!o.isMesh || o.userData.outline) return; if (!o.userData.mat0) o.userData.mat0 = o.material; o.material = lookKey === 'stone' ? tmat('#8a8a8a') : o.userData.mat0; });
     if (lookKey !== 'stone') {
-      const p = suit(B, h.power);
-      for (const k of ['cap', 'brim', 'bandL', 'bandR']) paint(u.parts[k], p.cap);
-      for (const k of ['shirt', 'armLm', 'armRm']) paint(u.parts[k], p.shirt);
-      for (const k of ['body', 'legLm', 'legRm']) paint(u.parts[k], p.alls);
-      u.parts.face.material = tmat(p.skin || B.skin);
+      const [shirt, alls] = suit(B, h.power), gold = h.power === 8, em = gold ? '#4a3000' : undefined;
+      for (const k of ['shirt', 'armLm', 'armRm']) paint(u.parts[k], shirt, em);
+      for (const k of ['body', 'legLm', 'legRm']) paint(u.parts[k], alls);
+      for (const k of ['bandL', 'bandR']) paint(u.parts[k], gold ? '#ffffff' : B.band);
+      u.parts.face.material = tmat(B.skin);
+      const tc = gold ? ['#ffd030', '#fff0a0'] : ['#5a3418', '#d8985a']; u.tail.children.forEach((c, i) => { if (c.isMesh) c.material = tmat(tc[(i + 1) % 2], gold ? '#4a3000' : undefined); });
+      u.ears.children.forEach((c, i) => { if (c.isMesh && i < 2) c.material = tmat(gold ? '#ffd030' : '#b8783a'); });
     }
-    const tailed = h.power === 3 || h.power === 4;
-    u.ears.visible = u.tail.visible = tailed; u.frogEyes.visible = h.power === 5; u.parts.hair.visible = h.power !== 5; u.parts.cap.visible = u.parts.brim.visible = h.power !== 5 && !(tailed && u.kind === 'jasper');
+    const p = h.power, tailed = p === 3 || p === 4 || p === 8, hood = p === 5 || p === 6 || p === 7;
+    u.ears.visible = u.tail.visible = tailed; u.frogEyes.visible = p === 5; u.lavaHood.visible = p === 6; u.beanie.visible = u.pack.visible = p === 7; u.crownG.visible = p === 8;
+    u.parts.hair.visible = !hood; u.parts.cap.visible = u.parts.brim.visible = !hood && !(tailed && u.kind === 'jasper') && p !== 8;
   }
   const S = B.size;
   if (h.statue > 0) { m.position.set(h.x + h.w / 2, h.y, h.z + h.d / 2); u.inner.rotation.set(0, 0, 0); for (const k of ['legL', 'legR', 'armL', 'armR']) u[k].rotation.set(0, 0, 0); m.visible = true; return; }
-  // blinking, and a face that changes: a big smile running or flying, wide eyes falling, scrunched up when hurt
+  // blinking, and a face that changes: an open smile running, flying or falling, eyes squeezed shut when hurt
   u.blink -= dt; if (u.blink < -3 - Math.random() * 2) u.blink = 0.12;
-  const scared = !h.onGround && h.vy < -12 && !h.flyT, hurtNow = h.inv > 1.5, happy = h.flyT > 0 || Math.hypot(h.vx, h.vz || 0) > 7;
-  u.eyes.scale.set(scared ? 1.12 : 1, u.blink > 0 || hurtNow ? 0.12 : scared ? 1.15 : 1, 1);
-  u.mouth.scale.set(happy || scared ? 1.3 : 1, happy || scared ? 1.8 : 1, 1);
-  const s = h.power ? 1 : 0.64; u.inner.scale.set(h.power ? 1 : 0.92, s, h.power ? 1 : 0.92); m.scale.setScalar(S);
+  const scared = !h.onGround && h.vy < -12 && !h.flyT, hurtNow = h.inv > 1.5, happy = h.flyT > 0 || Math.hypot(h.vx, h.vz || 0) > 7 || h.climbing;
+  u.eyes.scale.set(scared ? 1.1 : 1, u.blink > 0 || hurtNow ? 0.1 : scared ? 1.12 : 1, 1);
+  u.mouth.userData.open.visible = happy || scared || hurtNow; u.mouth.userData.arc.visible = !u.mouth.userData.open.visible; u.mouth.scale.set(1, scared ? 1.5 : 1, 1);
+  u.inner.scale.set(h.power ? 1 : 0.92, h.power ? 1 : 0.64, h.power ? 1 : 0.92); m.scale.setScalar(S);
   m.position.set(h.x + h.w / 2, h.y, h.z == null ? 0.1 : h.z + h.d / 2);
   const face = h.face == null ? 0 : h.face, dA = ((face - m.rotation.y + Math.PI) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2) - Math.PI;
   m.rotation.y += dA * Math.min(1, dt * 16);
   if (h.spin > 0) u.inner.rotation.y = (0.32 - h.spin) / 0.32 * Math.PI * 2; else u.inner.rotation.y = 0;
-  if (h.dead) { u.inner.rotation.y = 0; u.armL.rotation.z = -2.6; u.armR.rotation.z = 2.6; u.legL.rotation.x = u.legR.rotation.x = 0; u.eyes.scale.y = 0.12; return; }
+  if (h.dead) { u.inner.rotation.y = 0; u.armL.rotation.z = -2.6; u.armR.rotation.z = 2.6; u.legL.rotation.x = u.legR.rotation.x = 0; u.eyes.scale.y = 0.1; return; }
   u.armL.rotation.z = u.armR.rotation.z = 0;
   const speed = Math.hypot(h.vx, h.vz || 0);
   if (h.pound) { u.inner.rotation.x = h.pound === 1 ? (0.18 - h.poundT) / 0.18 * Math.PI * 2 : 0; u.legL.rotation.x = u.legR.rotation.x = -1.2; return; } u.inner.rotation.x = 0;
-  if (h.swimming) { u.inner.rotation.x = 1.0; const s2 = Math.sin(t * (h.power === 5 ? 14 : 8)); u.legL.rotation.x = s2 * 0.8; u.legR.rotation.x = -s2 * 0.8; u.armL.rotation.x = -2 + s2; u.armR.rotation.x = -2 - s2; m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2); return; }
-  u.inner.rotation.x = h.onGround ? Math.min(0.25, speed * 0.02) : 0;
+  if (h.climbing) { const c = Math.sin(t * 14); u.inner.rotation.x = -0.12; u.armL.rotation.x = -2.7 + c * 0.45; u.armR.rotation.x = -2.7 - c * 0.45; u.legL.rotation.x = -0.6 - c * 0.5; u.legR.rotation.x = -0.6 + c * 0.5; u.head.position.y = 1.28; m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2); return; }
+  if (h.swimming) { u.inner.rotation.x = 1.0; const s2 = Math.sin(t * (h.power === 5 || h.power === 8 ? 14 : 8)); u.legL.rotation.x = s2 * 0.8; u.legR.rotation.x = -s2 * 0.8; u.armL.rotation.x = -2 + s2; u.armR.rotation.x = -2 - s2; m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2); return; }
+  u.inner.rotation.x = h.onGround ? Math.min(0.22, speed * 0.018) : 0;
   if (!h.onGround) { u.legL.rotation.x = -0.9; u.legR.rotation.x = 0.6; u.armL.rotation.x = -2.7; u.armR.rotation.x = 0.5; u.armR.rotation.z = 0.4; if (h.flyT > 0 || h.wag > 0) u.armL.rotation.x = u.armR.rotation.x = -1.4 + Math.sin(t * 30) * 0.6; }
-  else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 1.0; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; u.armL.rotation.z = -0.25; u.armR.rotation.z = 0.25; }
-  // a happy little bounce: the head bobs and the whole body squashes a touch with each step
+  else { u.phase += dt * (4 + speed * 2.2); const a = Math.sin(u.phase) * Math.min(1, speed / 3) * 1.0; u.legL.rotation.x = a; u.legR.rotation.x = -a; u.armL.rotation.x = -a; u.armR.rotation.x = a; u.armL.rotation.z = -0.22; u.armR.rotation.z = 0.22; }
+  // a happy little bounce: the head bobs and tilts with each step, and breathes gently standing still
   const bob = h.onGround ? Math.abs(Math.sin(u.phase)) * Math.min(1, speed / 6) : 0;
-  u.head.position.y = 1.3 + bob * 0.06 + Math.sin(t * 2.2) * 0.014; u.head.rotation.z = Math.sin(u.phase) * 0.05 * Math.min(1, speed / 5);
-  u.parts.brim.rotation.x = u.kind === 'josh' ? Math.min(0.9, speed * 0.08) + Math.sin(t * 9) * 0.08 * Math.min(1, speed / 4) : 0;
+  u.head.position.y = 1.28 + bob * 0.06 + Math.sin(t * 2.2) * 0.012; u.head.rotation.z = Math.sin(u.phase) * 0.05 * Math.min(1, speed / 5);
+  u.parts.brim.rotation.x = u.kind === 'josh' ? Math.min(0.9, speed * 0.08) + Math.sin(t * 9) * 0.08 * Math.min(1, speed / 4) : 0.3;
   u.inner.position.y = h.power === 5 && h.onGround && speed > 0.5 ? Math.abs(Math.sin(u.phase)) * 0.3 : bob * 0.04;
   u.tail.rotation.y = Math.sin(t * (h.wag > 0 || h.flyT > 0 ? 40 : 4)) * 0.5;
+  if (u.lavaHood.visible) u.lavaHood.children.forEach((c, i) => { if (i > 1) c.scale.y = (c.userData.h0 || (c.userData.h0 = c.scale.y)) * (0.8 + Math.sin(t * 18 + i * 2) * 0.25); });
   m.visible = !(h.inv > 0 && Math.floor(t * 20) % 2);
 }
 // each land dresses its Mushlings its own way
@@ -399,6 +430,39 @@ export function makeEnemy(e) {
     for (let i = 0; i < 3; i++) { const s = new THREE.Group(); s.position.y = 0.4 + i * 0.8; s.add(ball(0.43, '#6ac83a')); for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2, sp = flat(cone(0.045, 0.17, '#fff8d0', Math.cos(a) * 0.43, (k % 2) * 0.15 - 0.07, Math.sin(a) * 0.43)); sp.rotation.set(Math.sin(a) * 1.5, 0, -Math.cos(a) * 1.5); s.add(sp); } inner.add(s); u.segs.push(s); }
     u.face = new THREE.Group(); u.face.add(cuteEye(-0.14, 0.08, 0.38, 1.45, '#2a5a1a'), cuteEye(0.14, 0.08, 0.38, 1.45, '#2a5a1a'), smile(-0.15, 0.4, 1), flat(ball(0.06, '#ff8ab0', -0.26, -0.06, 0.34, 1, 0.6, 0.3)), flat(ball(0.06, '#ff8ab0', 0.26, -0.06, 0.34, 1, 0.6, 0.3))); for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; u.face.add(ball(0.09, '#ff7aa8', Math.cos(a) * 0.11, 0.5, Math.sin(a) * 0.11)); } u.face.add(ball(0.065, '#ffd030', 0, 0.52, 0));
     inner.add(u.face);
+  } else if (e.kind === 'ghost') {
+    // a ghost: a plump white puff with a curling tail and stubby arms; it hides its face in its hands when you look at it
+    const W2 = '#f4f6ff'; inner.add(ball(0.42, W2, 0, 0.48, 0, 1, 1.02, 0.95));
+    const tl = ball(0.2, W2, 0.06, 0.12, -0.2, 0.8, 1.4, 0.8); tl.rotation.set(0.8, 0, 0.4); inner.add(tl);
+    u.armL = ball(0.1, W2, -0.4, 0.44, 0.12, 1, 0.8, 0.8); u.armR = ball(0.1, W2, 0.4, 0.44, 0.12, 1, 0.8, 0.8); inner.add(u.armL, u.armR);
+    u.face = new THREE.Group(); u.face.add(cuteEye(-0.13, 0.55, 0.36, 1.2, '#4a3a8a'), cuteEye(0.13, 0.55, 0.36, 1.2, '#4a3a8a'), flat(ball(0.05, '#ff9ad0', -0.24, 0.43, 0.34, 1, 0.6, 0.3)), flat(ball(0.05, '#ff9ad0', 0.24, 0.43, 0.34, 1, 0.6, 0.3)), flat(ball(0.045, '#6a2a4a', 0, 0.4, 0.4, 1, 0.8, 0.4)));
+    u.shy = new THREE.Group(); for (const sd of [-1, 1]) { const a = flat(new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.012, 6, 12, Math.PI), tmat('#3a2a5a'))); a.position.set(sd * 0.13, 0.55, 0.4); u.shy.add(a); } u.shy.add(flat(ball(0.07, '#ff9ad0', -0.22, 0.44, 0.35, 1.1, 0.6, 0.3)), flat(ball(0.07, '#ff9ad0', 0.22, 0.44, 0.35, 1.1, 0.6, 0.3))); u.shy.visible = false;
+    inner.add(u.face, u.shy);
+  } else if (e.kind === 'jelly') {
+    // a jellyfish: a glowing pink bell with a frilly rim, a sleepy smile, wavy tentacles
+    const bell = dome(0.42, '#ff9ad8', 0, 0.42, 0, 1, 0.9, 1); bell.material = tmat('#ff9ad8', '#5a1a48'); inner.add(bell, disc(0.4, 0.05, '#ffd0f0', 0, 0.42, 0));
+    for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2; inner.add(ball(0.07, '#ffd0f0', Math.cos(a) * 0.4, 0.4, Math.sin(a) * 0.4, 1, 0.6, 1)); }
+    u.tent = []; for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.3, tg = new THREE.Group(); tg.position.set(Math.cos(a) * 0.22, 0.4, Math.sin(a) * 0.22); tg.add(pill(0.035, 0.45, '#ffb0e0', 0, -0.25, 0)); inner.add(tg); u.tent.push(tg); }
+    inner.add(cuteEye(-0.13, 0.58, 0.32, 1.05, '#8a2a6a'), cuteEye(0.13, 0.58, 0.32, 1.05, '#8a2a6a'), smile(0.47, 0.38, 0.7), flat(ball(0.045, '#ff6ab0', -0.24, 0.5, 0.31, 1, 0.6, 0.3)), flat(ball(0.045, '#ff6ab0', 0.24, 0.5, 0.31, 1, 0.6, 0.3)));
+  } else if (e.kind === 'bubble') {
+    // a lava bubble: a hot little ball of fire with flickering flames and a cheeky grin
+    const core = ball(0.34, '#ff7a1a', 0, 0.35, 0); core.material = tmat('#ff7a1a', '#a83000'); inner.add(core);
+    u.flames = []; for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2, f = cone(0.1, 0.32, k % 2 ? '#ffd030' : '#ffa020', Math.cos(a) * 0.2, 0.66, Math.sin(a) * 0.2); f.material = tmat(k % 2 ? '#ffd030' : '#ffa020', '#8a4a00'); f.rotation.set(Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5); inner.add(f); u.flames.push(f); }
+    inner.add(cuteEye(-0.12, 0.4, 0.27, 1.1, '#5a1a00'), cuteEye(0.12, 0.4, 0.27, 1.1, '#5a1a00'), smile(0.25, 0.31, 0.8));
+  } else if (e.kind === 'ram') {
+    // a mountain ram: a fluffy cloud of wool, a dark face with big curled horns, four short legs
+    const wool = '#f8f4ea'; inner.add(ball(0.36, wool, 0, 0.6, -0.05, 1.05, 0.9, 1.2)); for (const [x, y, z] of [[0.22, 0.78, 0.1], [-0.22, 0.78, 0.1], [0, 0.86, -0.2], [0.26, 0.6, -0.3], [-0.26, 0.6, -0.3], [0, 0.72, 0.22]]) inner.add(ball(0.18, wool, x, y, z));
+    u.legs = []; for (const [x, z] of [[-0.18, 0.2], [0.18, 0.2], [-0.18, -0.28], [0.18, -0.28]]) { const lg = new THREE.Group(); lg.position.set(x, 0.32, z); lg.add(pill(0.07, 0.26, '#5a4a4a', 0, -0.14, 0), ball(0.075, '#2a2020', 0, -0.3, 0.01, 1, 0.6, 1.1)); inner.add(lg); u.legs.push(lg); }
+    const head = new THREE.Group(); head.position.set(0, 0.72, 0.4); head.add(ball(0.22, '#6a5a5a', 0, 0, 0.04, 0.95, 1, 1.1), ball(0.14, wool, 0, 0.16, -0.02, 1.2, 0.6, 1), cuteEye(-0.09, 0.03, 0.2, 1.05, '#3a2a1a'), cuteEye(0.09, 0.03, 0.2, 1.05, '#3a2a1a'), flat(ball(0.04, '#ff9aa0', -0.15, -0.07, 0.19, 1, 0.6, 0.3)), flat(ball(0.04, '#ff9aa0', 0.15, -0.07, 0.19, 1, 0.6, 0.3)), flat(ball(0.05, '#3a2a2a', 0, -0.12, 0.25, 1.2, 0.6, 0.5)));
+    for (const sd of [-1, 1]) { const hr = new THREE.Mesh(new THREE.TorusGeometry(0.12, 0.05, 8, 14, Math.PI * 1.6), tmat('#e8c890')); hr.position.set(sd * 0.22, 0.06, -0.02); hr.rotation.set(0, sd * Math.PI / 2, 0.8); head.add(hr); }
+    inner.add(head); u.head = head;
+  } else if (e.kind === 'penguin') {
+    // a penguin: round and navy blue, a white tummy, a red scarf, an orange beak and flat orange feet
+    inner.add(ball(0.36, '#2a3a62', 0, 0.44, 0, 0.95, 1.15, 0.9), ball(0.24, '#ffffff', 0, 0.3, 0.13, 0.95, 0.95, 0.8), ball(0.17, '#ffffff', 0, 0.62, 0.2, 1.25, 0.8, 0.6));
+    const sc2 = new THREE.Mesh(new THREE.TorusGeometry(0.31, 0.06, 8, 20), tmat('#e83a4a')); sc2.rotation.x = Math.PI / 2; sc2.position.y = 0.47; inner.add(sc2, tbox(0.09, 0.22, 0.04, '#e83a4a', 0.15, 0.36, 0.3));
+    const bk = cone(0.065, 0.15, '#ffa020', 0, 0.57, 0.39); bk.rotation.x = Math.PI / 2; inner.add(bk, cuteEye(-0.1, 0.67, 0.29, 1.05, '#1a2a4a'), cuteEye(0.1, 0.67, 0.29, 1.05, '#1a2a4a'), flat(ball(0.045, '#ff9aa6', -0.2, 0.58, 0.29, 1, 0.6, 0.3)), flat(ball(0.045, '#ff9aa6', 0.2, 0.58, 0.29, 1, 0.6, 0.3)));
+    u.flipL = ball(0.12, '#2a3a62', -0.34, 0.5, 0, 0.4, 1, 0.7); u.flipR = ball(0.12, '#2a3a62', 0.34, 0.5, 0, 0.4, 1, 0.7); inner.add(u.flipL, u.flipR);
+    u.feet = [ball(0.1, '#ffa020', -0.12, 0.04, 0.1, 1, 0.4, 1.5), ball(0.1, '#ffa020', 0.12, 0.04, 0.1, 1, 0.4, 1.5)]; inner.add(...u.feet);
   } else if (e.kind === 'boss' && e.prince) {
     // the little prince: a cheeky brat in a blue cap with a magic wand
     const shell = dome(0.62, '#4ac84a', 0, 0.45, 0, 1, 1.1, 1);
@@ -432,13 +496,47 @@ export function poseEnemy(m, e, dt, t) {
   if (e.kind === 'pokey') { const n = Math.max(0, e.segs || 0); u.segs.forEach((s, i) => { s.visible = i < n; s.position.x = Math.sin(t * 4 + i) * 0.06 * (i + 1); }); u.face.position.y = 0.4 + (n - 1) * 0.8; u.face.position.x = u.segs[Math.max(0, n - 1)].position.x; }
   if (e.kind === 'boss') { m.visible = !(e.inv > 0 && Math.floor(t * 16) % 2); u.head.rotation.z = Math.sin(t * 5) * 0.08; if (u.wand) u.wand.rotation.z = -0.4 + Math.sin(t * 6) * 0.5; }
   if (e.kind === 'fish') u.fin.rotation.y = Math.sin(t * 12) * 0.6;
+  if (e.kind === 'ghost') { const shy = !!e.shy; u.face.visible = !shy; u.shy.visible = shy; u.armL.position.set(shy ? -0.14 : -0.4, shy ? 0.56 : 0.42 + Math.sin(t * 3) * 0.04, shy ? 0.4 : 0.12); u.armR.position.set(shy ? 0.14 : 0.4, shy ? 0.56 : 0.42 + Math.sin(t * 3 + 1) * 0.04, shy ? 0.4 : 0.12); u.inner.position.y = Math.sin(t * 2.5 + e.id) * 0.08; u.inner.rotation.z = Math.sin(t * 1.7) * 0.08; }
+  if (e.kind === 'jelly') { const pz = Math.sin(t * 3 + e.id); u.inner.scale.set(1 + pz * 0.06, 1 - pz * 0.08, 1 + pz * 0.06); u.tent.forEach((tg, i) => { tg.rotation.x = Math.sin(t * 2.4 + i) * 0.35; tg.rotation.z = Math.cos(t * 2 + i) * 0.3; }); }
+  if (e.kind === 'bubble') { m.visible = e.out !== false || !e.alive; u.flames.forEach((f, i) => { f.scale.y = 0.32 * (0.75 + Math.sin(t * 20 + i * 1.7) * 0.3); }); const down = e.alive && e.vy < 0; u.inner.rotation.x = down ? Math.PI : 0; u.inner.position.y = down ? 0.7 : 0; }
+  if (e.kind === 'ram') { const go = e.st === 'charge' ? 22 : e.st === 'walk' ? 10 : 0; u.legs.forEach((lg, i) => { lg.rotation.x = go ? Math.sin(t * go + (i === 0 || i === 3 ? 0 : Math.PI)) * 0.6 : 0; }); u.head.rotation.x = e.st === 'aim' || e.st === 'charge' ? 0.45 : 0; u.inner.rotation.z = e.st === 'rest' && e.dizzy ? Math.sin(t * 10) * 0.15 : 0; u.inner.position.x = e.st === 'aim' ? Math.sin(t * 50) * 0.03 : 0; }
+  if (e.kind === 'penguin') { const sl = e.st === 'slide'; u.inner.rotation.x = sl ? 1.35 : 0; u.inner.position.y = sl ? 0.35 : 0; const f = sl ? 0.2 : Math.sin(t * 10 + e.id) * 0.4; u.flipL.rotation.z = 0.3 + f; u.flipR.rotation.z = -0.3 - f; if (!sl) u.inner.rotation.z = Math.sin(t * 10 + e.id) * 0.1; }
 }
 
 let STARGEO = null;
 function starGeo() { if (STARGEO) return STARGEO; const sh = new THREE.Shape(); for (let i = 0; i < 10; i++) { const a = i / 10 * Math.PI * 2 + Math.PI / 2, r = i % 2 ? 0.2 : 0.48; const x = Math.cos(a) * r, y = Math.sin(a) * r; if (i) sh.lineTo(x, y); else sh.moveTo(x, y); } sh.closePath(); STARGEO = new THREE.ExtrudeGeometry(sh, { depth: 0.16, bevelEnabled: true, bevelThickness: 0.06, bevelSize: 0.05, bevelSegments: 2 }); STARGEO.center(); return STARGEO; }
 export function makeRedCoin() { const m = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.1, 16), cmat('#e8302a', '#7a1000')); m.rotation.x = Math.PI / 2; const g = new THREE.Group(); g.add(m); return g; }
-export function makeItem(kind) {
+export function makeItem(kind, it) {
   const g = new THREE.Group();
+  if (kind === 'suit') {
+    // a suit floating in its shrine: a little jacket and shorts with what makes it special, turning in a golden ring
+    const id = (it && it.suit) || 'leaf', C = { leaf: ['#82d052', '#3a62d8'], frog: ['#4ad84a', '#2aa83a'], lava: ['#ff6a1a', '#3a2a2a'], climb: ['#5a8a3a', '#7a5a3a'], tanooki: ['#b0703a', '#7a4418'], gold: ['#ffd030', '#fff0b0'] }[id];
+    const s = new THREE.Group(); s.position.y = 0.2; const em = id === 'gold' ? '#5a3a00' : undefined;
+    const top = ball(0.24, C[0], 0, 0.42, 0, 1.05, 1, 0.8); top.material = tmat(C[0], em); s.add(top, ball(0.23, C[1], 0, 0.2, 0, 1.05, 0.55, 0.8), pill(0.08, 0.18, C[0], -0.28, 0.4, 0), pill(0.08, 0.18, C[0], 0.28, 0.4, 0), ball(0.12, '#ffffff', 0, 0.6, 0.02, 1.3, 0.4, 1.1));
+    s.children[2].rotation.z = 0.5; s.children[3].rotation.z = -0.5;
+    if (id === 'leaf' || id === 'tanooki' || id === 'gold') { const tc = id === 'gold' ? '#ffd030' : '#d8985a'; for (let i = 0; i < 4; i++) s.add(ball(0.11, i % 2 ? (id === 'gold' ? '#fff0a0' : '#5a3418') : tc, 0.05, 0.25 - i * 0.03, -0.2 - i * 0.1)); }
+    if (id === 'leaf') { const lf = ball(0.22, '#7ac83a', 0, 0.85, 0, 1, 0.2, 0.62); lf.rotation.z = 0.4; s.add(lf, tbox(0.03, 0.18, 0.03, '#5a3a18', -0.1, 0.72, 0)); }
+    if (id === 'tanooki') s.add(ball(0.09, '#b8783a', -0.14, 0.7, 0, 1, 1.1, 0.5), ball(0.09, '#b8783a', 0.14, 0.7, 0, 1, 1.1, 0.5));
+    if (id === 'frog') { s.add(dome(0.25, '#4ad84a', 0, 0.62, 0)); for (const x of [-0.1, 0.1]) s.add(ball(0.08, '#4ad84a', x, 0.86, 0.02), cuteEye(x, 0.88, 0.08, 0.7, '#2a8a2a')); }
+    if (id === 'lava') for (const [x, hh] of [[-0.1, 0.24], [0, 0.34], [0.1, 0.24]]) { const f = cone(0.07, hh, '#ffd030', x, 0.65 + hh / 2, 0); f.material = tmat('#ffd030', '#8a4a00'); s.add(f); }
+    if (id === 'climb') { s.add(dome(0.22, '#e84a4a', 0, 0.64, 0), ball(0.07, '#ffffff', 0, 0.87, 0), tbox(0.26, 0.3, 0.12, '#8a5a32', 0, 0.36, -0.2)); }
+    if (id === 'gold') for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2, c = cone(0.04, 0.12, '#ffd030', Math.sin(a) * 0.12, 0.72, Math.cos(a) * 0.12); c.material = tmat('#ffd030', '#6a4a00'); s.add(c); }
+    ink(s, 0.02); g.add(s); g.userData.spin = s;
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(0.55, 0.035, 8, 32), cmat('#ffe080', '#a07000')); ring.rotation.x = Math.PI / 2; ring.position.y = 0.05; g.add(ring);
+    const glow = new THREE.PointLight(id === 'lava' ? '#ff8a40' : id === 'frog' ? '#80ff90' : '#ffe8a0', 1.3, 6); glow.position.y = 0.7; g.add(glow); return g;
+  }
+  if (kind === 'relic') {
+    // a mysterious treasure: it glows, turns slowly, and has a sparkle all of its own
+    const id = (it && it.id) || 'heart', s = new THREE.Group(); s.position.y = 0.45;
+    if (id === 'heart') { const c = '#ff3a4a', m = tmat(c, '#8a0a10'); const a = ball(0.17, c, -0.1, 0.06, 0), b = ball(0.17, c, 0.1, 0.06, 0), tip = cone(0.22, 0.3, c, 0, -0.14, 0); tip.rotation.z = Math.PI; for (const o of [a, b, tip]) { o.material = m; o.scale.z *= 0.7; } s.add(a, b, tip); for (let k = 0; k < 3; k++) { const f = cone(0.06, 0.2, '#ffd030', -0.12 + k * 0.12, 0.3, 0); f.material = tmat('#ffd030', '#8a5a00'); s.add(f); } }
+    if (id === 'feather') { const f = ball(0.13, '#ffffff', 0, 0.05, 0, 0.9, 3, 0.25); f.rotation.z = 0.35; const q2 = pill(0.02, 0.55, '#ffd030', 0.05, -0.02, 0.03); q2.rotation.z = 0.35; s.add(f, q2, ball(0.05, '#ffd030', 0.14, -0.3, 0)); for (let k = 0; k < 3; k++) { const st = ball(0.06, '#e8c060', -0.02 + k * 0.03, 0.15 - k * 0.12, 0.03, 0.9, 0.5, 0.3); st.rotation.z = 0.35; s.add(flat(st)); } }
+    if (id === 'pearl') { const sh1 = ball(0.28, '#ffb0c8', 0, -0.14, 0, 1, 0.22, 1), sh2 = ball(0.28, '#ffc8d8', 0, 0.06, -0.2, 1, 0.22, 1); sh2.rotation.x = -1.0; for (let k = -2; k <= 2; k++) { const rb = flat(pill(0.015, 0.24, '#ff8ab0', k * 0.09, 0.1, -0.24)); rb.rotation.set(-1.0 + Math.PI / 2, 0, k * 0.25); sh2.add(rb); } const pr = ball(0.15, '#fff8ff', 0, -0.0, 0.02); pr.material = tmat('#fff8ff', '#5a4a6a'); s.add(sh1, sh2, pr); }
+    if (id === 'fruit') { const cols = ['#ff4a4a', '#ffa030', '#ffe040', '#5ad84a', '#3a9aff', '#a05aff']; s.add(ball(0.24, '#ffffff', 0, 0, 0)); cols.forEach((c, i) => { const rg = new THREE.Mesh(new THREE.TorusGeometry(0.24 * Math.sin((i + 0.5) / 6 * Math.PI), 0.05, 6, 20), tmat(c, '#202020')); rg.rotation.x = Math.PI / 2; rg.position.y = 0.24 * Math.cos((i + 0.5) / 6 * Math.PI); s.add(rg); }); const lf = ball(0.1, '#3ab83a', 0.08, 0.27, 0, 1, 0.3, 0.6); lf.rotation.z = -0.5; s.add(lf, tbox(0.03, 0.1, 0.03, '#5a3a18', 0, 0.26, 0)); }
+    if (id === 'key') { const moon = new THREE.Mesh(new THREE.TorusGeometry(0.15, 0.06, 8, 20, Math.PI * 1.4), tmat('#d8e8ff', '#3a4a7a')); moon.position.y = 0.12; moon.rotation.z = 0.9; s.add(moon, tbox(0.05, 0.36, 0.05, '#d8e8ff', 0, -0.16, 0), tbox(0.12, 0.05, 0.05, '#d8e8ff', 0.06, -0.3, 0), tbox(0.09, 0.05, 0.05, '#d8e8ff', 0.05, -0.2, 0), ball(0.04, '#ffd030', 0, 0.12, 0)); s.children.forEach((c) => { if (c.isMesh && c !== moon) c.material = tmat(c.material.color.getStyle(), '#2a3a6a'); }); }
+    ink(s, 0.02); g.add(s); g.userData.spin = s;
+    for (let k = 0; k < 4; k++) { const sp = new THREE.Mesh(new THREE.OctahedronGeometry(0.05), new THREE.MeshBasicMaterial({ color: '#ffffff' })); sp.userData.k = k; g.add(sp); } g.userData.sparks = g.children.filter((c) => c.userData.k != null);
+    const glow = new THREE.PointLight({ heart: '#ff6a4a', feather: '#fff0c0', pearl: '#ffc0f0', fruit: '#ffffff', key: '#a0c0ff' }[id], 1.6, 7); glow.position.y = 0.5; g.add(glow); return g;
+  }
   if (kind === 'secret') { const st = new THREE.Mesh(starGeo(), new THREE.MeshLambertMaterial({ color: '#ffd030', emissive: '#a06a00' })); st.position.y = 0.45; st.castShadow = true; g.add(st); for (const x of [-0.09, 0.09]) g.add(box(0.05, 0.14, 0.04, '#1a1a1a', x, 0.5, 0.15)); const glow = new THREE.PointLight('#ffe080', 1.2, 6); glow.position.y = 0.5; g.add(glow); g.userData.star = st; return g; }
   if (kind === 'mush' || kind === 'oneup') {
     const cap = new THREE.Mesh(new THREE.SphereGeometry(0.42, 14, 10, 0, Math.PI * 2, 0, Math.PI / 2), cmat(kind === 'mush' ? '#e8302a' : '#2ab83a')); cap.position.y = 0.38;

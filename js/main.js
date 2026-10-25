@@ -2,11 +2,11 @@
 // Leafy Land is a single island now: walk anywhere, climb the cloud stairs, take a warp pipe home to Mushroom Village,
 // and cross each course's finish line for its card. There is no world map any more; the map screen shows the island.
 import * as THREE from 'three';
-import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn } from './game.js?v=7';
-import { LEVELS } from './levels.js?v=7';
-import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY, SEA } from './world.js?v=7';
-import { buildWorldView, worldMapImage, makeHero, BROS, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=7';
-import { Sound } from './audio.js?v=7';
+import { T, newRun, step, floorBelow, tileAt, isSolid, setPower, respawn, wear, suitItem, SUITS, SUIT_ORDER, SUIT_OF, RELICS, RELIC_ORDER, PH } from './game.js?v=8';
+import { LEVELS } from './levels.js?v=8';
+import { buildWorld, COURSES, ORDER, PLACES, LANDS, LAND_ORDER, SECRET_LANDS, airshipCells, regionAt, GY, SEA } from './world.js?v=8';
+import { buildWorldView, worldMapImage, makeHero, BROS, poseHero, makeEnemy, poseEnemy, makeItem, makeRedCoin, makeFireball, makeShot, makeCoinPop, tileBox, look, box, cmat, cardDataURL } from './view.js?v=8';
+import { Sound } from './audio.js?v=8';
 
 const $ = (id) => document.getElementById(id);
 // ---------------------------------------------------------------- language
@@ -19,9 +19,11 @@ const N = (pair) => pair[EN() ? 1 : 0];
 
 // ---------------------------------------------------------------- the save (an old world-map save carries over)
 const KEY = 'leafleap.save';
-const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {}, secrets: {}, big: true, big2: true, bro: 'josh' });
+const fresh = () => ({ v: 2, cleared: {}, lives: 5, coins: 0, items: ['mush'], power: 0, cards: [], houses: {}, spade: false, won: false, at: null, warps: {}, seen: {}, secrets: {}, big: true, big2: true, bro: 'josh', suits: {}, relics: {} });
 let SAVE = (() => { try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && (s.v === 1 || s.v === 2)) return { ...fresh(), ...s, v: 2, at: s.v === 2 && s.big2 ? s.at : null, big: true, big2: true, bro: s.bro === 'jasper' ? 'jasper' : 'josh' }; } catch (e) { /* none */ } return null; })();
 const hadSave = !!SAVE; if (!SAVE) SAVE = fresh();
+SAVE.items = SAVE.items.map((it) => (it === 'leaf' || it === 'tanooki' || it === 'frog' ? 'mush' : it));
+const relicsN = () => RELIC_ORDER.filter((k) => SAVE.relics[k]).length, allRelics = () => relicsN() === RELIC_ORDER.length;
 const store = () => { try { localStorage.setItem(KEY, JSON.stringify(SAVE)); } catch (e) { /* private mode */ } };
 
 // ---------------------------------------------------------------- renderer
@@ -39,7 +41,7 @@ addEventListener('resize', resize); resize();
 const sound = new Sound();
 const skyTex = (a, b) => { const c = document.createElement('canvas'); c.width = 2; c.height = 128; const g = c.getContext('2d'), gr = g.createLinearGradient(0, 0, 0, 128); gr.addColorStop(0, a); gr.addColorStop(1, b); g.fillStyle = gr; g.fillRect(0, 0, 2, 128); const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; return t; };
 const SKIES = { grass: ['#4aa8ff', '#d0f0ff', '#cfeaff', 90, 620], map: ['#4aa8ff', '#d0f0ff', '#cfeaff', 90, 620], sky: ['#2a8aff', '#e8f6ff', '#e0f2ff', 100, 680], water: ['#3a9ae8', '#c8ecff', '#cfeaff', 90, 560], airship: ['#ff8a4a', '#ffe0a8', '#ffc890', 90, 520],
-  deep: ['#0a2a5a', '#1a4a88', '#123a70', 4, 34], abyss: ['#020814', '#0a1a38', '#061020', 3, 24],
+  deep: ['#0a2a5a', '#1a4a88', '#123a70', 4, 34], abyss: ['#020814', '#0a1a38', '#061020', 3, 24], molten: ['#3a0a00', '#c84a10', '#d8501a', 1.5, 12], ghost: ['#0a0612', '#2a1a3a', '#1a1028', 8, 44],
   cave: ['#05070d', '#141a30', '#0a0e1a', 14, 46], fort: ['#100e16', '#2a2030', '#1a1620', 16, 50], under: ['#1a5aa8', '#2a7ac8', '#2a7ac8', 6, 40],
   snow: ['#8ab8e8', '#f4f8ff', '#e8f0fa', 80, 560], desert: ['#5aa8e8', '#fff0c8', '#f8e4b8', 90, 560], volcano: ['#5a2a2a', '#e8805a', '#a8604a', 50, 280] };
 const skyCache = {};
@@ -50,11 +52,18 @@ const W0 = buildWorld();
 const S = { mode: 'title', panel: null, G: null, V: null, deadT: 0, acc: 0, t: 0, shake: 0, region: null, sky: null, doorCd: 0, warpT: 0 };
 // the save's state goes back into the world: the airship stair once the fortress is beaten
 function openAirship(G, announce) { for (const [x, y, z] of airshipCells(W0)) if (tileAt(G.L, x, y, z) === T.EMPTY) { G.L.set(x, y, z, T.CLOUD); if (S.V) S.V.touch(x, z); } if (announce) { banner(L('通往飛行船的雲梯出現了！', 'A cloud stair to the airship has appeared!'), L('在熔岩城的南邊', 'south of the Lava Castle')); sound.play('note'); } }
+function gateState(G, announce) {
+  const g = W0.gate; RELIC_ORDER.forEach((k, i) => { const [x, y, z] = g.lamps[i], want = SAVE.relics[k] ? T.CAPGOLD : T.BASALT; if (tileAt(G.L, x, y, z) !== want) { G.L.set(x, y, z, want); if (S.V) S.V.touch(x, z); } });
+  if (!allRelics()) return;
+  for (const [x, y, z] of g.door) if (tileAt(G.L, x, y, z) !== T.EMPTY) { G.L.set(x, y, z, T.EMPTY); if (S.V) S.V.touch(x, z); }
+  if (announce) { G.items.push(suitItem(W0.suits.find((q2) => q2.id === 'gold'))); setTimeout(() => { banner(L('神秘之門打開了！', 'The Mystery Gate is open!'), L('回蘑菇村，門後面有黃金套裝', 'Back in the village, the Golden Suit waits behind it')); sound.play('fanfare'); }, 3000); }
+}
 function newWorld() {
   const at = SAVE.at && !isSolid(tileAt(W0, Math.floor(SAVE.at[0]), Math.floor(SAVE.at[1]), Math.floor(SAVE.at[2]))) ? SAVE.at : W0.start;
-  S.G = newRun(W0, { power: SAVE.power, at, done: SAVE.cleared, found: SAVE.secrets });
+  S.G = newRun(W0, { power: SAVE.power, at, done: SAVE.cleared, found: SAVE.secrets, relics: SAVE.relics, perks: SAVE.relics, gold: allRelics() });
   S.G.respawn = at;
   if (SAVE.cleared['1-F']) openAirship(S.G, false);
+  gateState(S.G, false);
 }
 newWorld();
 S.V = buildWorldView(scene, S.G); S.V.prime(S.G.hero.x, S.G.hero.z);
@@ -104,7 +113,7 @@ const ents = new Map(), anims = [];
 
 // ---------------------------------------------------------------- input: keyboard, controller and touch all become the same buttons
 const keys = new Set(), tapped = new Set();
-const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pound: ['KeyC', 'KeyL', 'ControlLeft'], camL: ['KeyQ'], camR: ['KeyE'], pause: ['Escape', 'KeyP'], confirm: ['Enter'], items: ['Tab', 'KeyI'], map: ['KeyM'], swap: ['KeyV'] };
+const KEYS = { left: ['ArrowLeft', 'KeyA'], right: ['ArrowRight', 'KeyD'], up: ['ArrowUp', 'KeyW'], down: ['ArrowDown', 'KeyS'], jump: ['Space', 'KeyZ', 'KeyK'], run: ['ShiftLeft', 'ShiftRight', 'KeyX', 'KeyJ'], pound: ['KeyC', 'KeyL', 'ControlLeft'], camL: ['KeyQ'], camR: ['KeyE'], pause: ['Escape', 'KeyP'], confirm: ['Enter'], items: ['Tab', 'KeyI'], map: ['KeyM'], swap: ['KeyV'], suit: ['KeyR'] };
 addEventListener('keydown', (e) => {
   if (e.target.tagName === 'INPUT') return; sound.start();
   if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Tab'].includes(e.code)) e.preventDefault();
@@ -112,7 +121,7 @@ addEventListener('keydown', (e) => {
 });
 addEventListener('keyup', (e) => keys.delete(e.code));
 const touchHeld = {};
-for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-c', 'pound'], ['t-pause', 'pause'], ['t-swap', 'swap']]) {
+for (const [id, k] of [['t-left', 'left'], ['t-right', 'right'], ['t-up', 'up'], ['t-down', 'down'], ['t-a', 'jump'], ['t-b', 'run'], ['t-c', 'pound'], ['t-pause', 'pause'], ['t-swap', 'swap'], ['t-suit', 'suit']]) {
   const b = $(id); const on = (e) => { e.preventDefault(); sound.start(); if (!touchHeld[k]) tapped.add(k); touchHeld[k] = true; b.classList.add('on'); }, off = () => { touchHeld[k] = false; b.classList.remove('on'); };
   b.addEventListener('pointerdown', on); b.addEventListener('pointerup', off); b.addEventListener('pointerleave', off); b.addEventListener('pointercancel', off);
 }
@@ -130,7 +139,7 @@ function readButtons() {
     const b = (i) => !!(gp.buttons[i] && gp.buttons[i].pressed), ax = gp.axes[0] || 0, ay = gp.axes[1] || 0, dz = (v) => (Math.abs(v) < 0.18 ? 0 : (v - Math.sign(v) * 0.18) / 0.82);
     stick.x = dz(ax); stick.y = dz(ay); stick.rx = dz(gp.axes[2] || 0); stick.ry = dz(gp.axes[3] || 0);
     digital.left = digital.left || b(14); digital.right = digital.right || b(15); digital.up = digital.up || b(12); digital.down = digital.down || b(13);
-    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), pound: b(3) || b(6), pause: b(9), items: b(8), map: b(4), swap: b(5) };
+    const pad = { left: b(14) || ax < -0.45, right: b(15) || ax > 0.45, up: b(12) || ay < -0.5, down: b(13) || ay > 0.5, jump: b(0), run: b(1) || b(2) || b(7), pound: b(3) || b(6), pause: b(9), items: b(8), map: b(4), swap: b(5), suit: b(11) || b(10) };
     if (Object.values(pad).some(Boolean) && !PAD.used) { PAD.used = true; staticText(); }
     for (const k in pad) held[k] = held[k] || pad[k];
   }
@@ -173,10 +182,11 @@ function hud() {
   const h = S.G.hero, pm = h.pm, lit = Math.floor(pm * 6 + 0.001);
   $('pm').innerHTML = [0, 1, 2, 3, 4, 5].map((i) => `<i class="${i < lit ? 'on' : ''}">▶</i>`).join('') + `<b class="${pm >= 1 ? 'on' : ''}">P</b>`;
   $('cards').innerHTML = [0, 1, 2].map((i) => `<span>${SAVE.cards[i] ? cardImg(SAVE.cards[i]) : ''}</span>`).join('');
+  { const h2 = S.G.hero, a = $('air'); if (h2.air < PH.air - 0.05 && h2.swimming && !h2.dead) { const n = Math.ceil(h2.air / PH.air * 8); a.innerHTML = `${L('氧氣', 'Air')} ` + Array.from({ length: 8 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join(''); a.hidden = false; a.classList.toggle('low', n <= 2); } else a.hidden = true; }
   $('where').textContent = `★${clearedN()}/${ORDER.length} ✦${secretsN()}/${W0.secrets.length} ${S.region ? N(S.region.name) : ''}`;
 }
 function hudItems() { $('items').innerHTML = `<span>🎒</span>` + (SAVE.items.length ? SAVE.items.map(itemImg).join('') : `<small>${L('（沒有道具）', '(no items)')}</small>`) + `<em>${N(POWER_NAME[S.G.hero.power])}</em>`; }
-const POWER_NAME = [['小', 'Small'], ['大', 'Big'], ['火焰', 'Fire'], ['狸貓尾巴', 'Raccoon'], ['狸貓裝', 'Tanooki'], ['青蛙裝', 'Frog']];
+const POWER_NAME = [['小', 'Small'], ['大', 'Big'], ['火焰', 'Fire'], ...[3, 4, 5, 6, 7, 8].map((p) => SUITS[SUIT_OF[p]].name)];
 const ITEM_NAME = { mush: ['蘑菇', 'Mushroom'], flower: ['火焰花', 'Fire Flower'], leaf: ['神奇葉子', 'Super Leaf'], tanooki: ['狸貓裝', 'Tanooki Suit'], frog: ['青蛙裝', 'Frog Suit'], pwing: ['P 翅膀', 'P-Wing'] };
 const ITEM_POWER = { mush: 1, flower: 2, leaf: 3, tanooki: 4, frog: 5 };
 const _icons = {}; let _leaf = null;
@@ -196,7 +206,7 @@ function prompt(text) { const d = $('nodename'); if (d.dataset.t === (text || ''
 
 // ---------------------------------------------------------------- Mushroom Houses, the spade panel, items
 // the first house hides a leaf, a tanooki suit and a frog suit; the second, the two suits and a P-wing
-const HOUSE_ITEMS = { house: ['leaf', 'tanooki', 'frog'], house2: ['tanooki', 'frog', 'pwing'], house3: ['pwing', 'leaf', 'tanooki'] };
+const HOUSE_ITEMS = { house: ['mush', 'flower', 'pwing'], house2: ['flower', 'pwing', 'mush'], house3: ['pwing', 'flower', 'flower'] };
 function housePanel(id) {
   const chest = [...HOUSE_ITEMS[id]].sort(() => Math.random() - 0.5);
   showPanel('house', L('蘑菇小屋', 'Mushroom House'), () => `<p class="say">${L('歡迎！選一個寶箱，裡面的道具送給你。', 'Welcome! Pick a chest, and what is inside is yours.')}</p><div class="chests">${[1, 2, 3].map((i) => btn(`<i class="chest"></i>${i}`, () => {
@@ -204,9 +214,9 @@ function housePanel(id) {
     showPanel('house', L('得到了！', 'You got it!'), () => `<div class="got">${itemImg(it)}</div><p class="say">${N(ITEM_NAME[it])} — ${L('按 Tab（或點左上的背包）隨時使用。', 'use it any time from your bag (Tab, or tap it).')}</p>${btn('OK', closePanel, { cls: 'go' })}`);
   }, { cls: 'chestbtn' })).join('')}</div>`);
 }
-const SPADE_PRIZE = { mush: 'item', flower: 'item', leaf: 'item', tanooki: 'item', frog: 'item', star: 'life', coin: 'coins' };
+const SPADE_PRIZE = { mush: 'item', flower: 'item', pwing: 'item', star: 'life', coin: 'coins' };
 function spadePanel() {
-  const deck = ['mush', 'mush', 'flower', 'flower', 'star', 'leaf', 'tanooki', 'frog', 'coin'].flatMap((k) => [k, k]).sort(() => Math.random() - 0.5);
+  const deck = ['mush', 'mush', 'flower', 'flower', 'star', 'star', 'pwing', 'coin', 'coin'].flatMap((k) => [k, k]).sort(() => Math.random() - 0.5);
   const st = { deck, done: new Set(), open: [], miss: 0, busy: false, won: [] };
   const draw = () => showPanel('spade', L('黑桃翻牌', 'Spade Panel'), () => {
     let h = `<p class="say">${L('翻兩張一樣的卡就能拿到獎品。錯兩次遊戲就結束。', 'Turn over two matching cards to win the prize. Two misses and the game is over.')} <b>${L('失誤', 'Misses')}: ${st.miss} / 2</b></p><div class="deck">`;
@@ -232,11 +242,23 @@ function spadePanel() {
   };
   draw();
 }
+const ownedSuits = () => SUIT_ORDER.filter((k) => SAVE.suits[k]);
+function putOn(k) {
+  const h = S.G.hero; if (h.dead || h.statue > 0) return;
+  const to = k ? SUITS[k].power : Math.max(1, h.power <= 2 ? h.power : 1); if (to === h.power) return;
+  wear(S.G, to); SAVE.power = to; store(); hudItems(); sound.play(k ? 'suit' : 'unstatue'); puff(h);
+  toast(k ? `${L('換上', 'Now wearing the ')}${N(SUITS[k].name)}${L('！', '!')} <small>${N(SUITS[k].what)}</small>` : L('脫下套裝', 'Suit off'));
+}
+function cycleSuit() {
+  const own = ownedSuits(); if (!own.length) { toast(L('還沒有套裝。去各地的套裝神殿拿吧！', 'No suits yet. Find them in the suit shrines around Leafy Land!')); sound.play('deny'); return; }
+  const list = [null, ...own], cur = SUIT_OF[S.G.hero.power] || null, i = list.indexOf(cur); putOn(list[(i + 1) % list.length]);
+}
 function itemsPanel() {
   const h = S.G.hero;
   showPanel('items', L('道具', 'Items'), () => {
-    if (!SAVE.items.length) return `<p class="say">${L('沒有道具。蘑菇小屋和黑桃翻牌可以拿到。', 'No items. The Mushroom Houses and the spade panel give them.')}</p>${btn('OK', closePanel)}`;
-    return `<p class="say">${L('隨時都可以用。', 'Use one any time.')} ${L('目前', 'Now')}: <b>${N(POWER_NAME[h.power])}</b></p><div class="row">` + SAVE.items.map((it, i) => btn(`${itemImg(it)}<span>${N(ITEM_NAME[it])}</span>`, () => {
+    const wardrobe = `<p class="say">${L('套裝（按 R 也可以換）', 'Suits (R changes them too)')}: ${ownedSuits().length} / ${SUIT_ORDER.length}</p><div class="row suits">` + SUIT_ORDER.map((k) => SAVE.suits[k] ? btn(`<i class="sw s-${k}"></i><span>${N(SUITS[k].name)}</span>`, () => { closePanel(); putOn(k); }, { cls: 'itembtn' + (SUIT_OF[h.power] === k ? ' on' : '') }) : `<button class="itembtn" disabled><i class="sw"></i><span>？？？</span></button>`).join('') + `</div><p class="say small">${L('神秘寶物', 'Mysterious treasures')}: ${RELIC_ORDER.map((k) => SAVE.relics[k] ? `<b title="${N(RELICS[k].what)}">${N(RELICS[k].name)}</b>` : '？').join(' · ')}</p>`;
+    if (!SAVE.items.length) return wardrobe + `<p class="say">${L('沒有道具。蘑菇小屋和黑桃翻牌可以拿到。', 'No items. The Mushroom Houses and the spade panel give them.')}</p>${btn('OK', closePanel)}`;
+    return wardrobe + `<p class="say">${L('道具隨時都可以用。', 'Use an item any time.')} ${L('目前', 'Now')}: <b>${N(POWER_NAME[h.power])}</b></p><div class="row">` + SAVE.items.map((it, i) => btn(`${itemImg(it)}<span>${N(ITEM_NAME[it])}</span>`, () => {
       if (it === 'pwing') { SAVE.items.splice(i, 1); h.pwing = true; S.pwingT = 60; if (h.power !== 3 && h.power !== 4) setPower(h, 3); SAVE.power = h.power; sound.play('leaf'); store(); hudItems(); closePanel(); toast(L('P 翅膀！60 秒內可以一直飛', 'P-wing! Fly as long as you like for 60 seconds')); return; }
       const p = ITEM_POWER[it]; if (p === h.power || (it === 'mush' && h.power > 0)) { sound.play('deny'); toast(L('現在用沒有效果', 'That would not help right now')); return; }
       setPower(h, p); SAVE.power = p; SAVE.items.splice(i, 1); sound.play(it === 'leaf' ? 'leaf' : 'power'); store(); hudItems(); closePanel(); toast(L(`變成${N(POWER_NAME[p])}了！`, `Now ${N(POWER_NAME[p])}!`));
@@ -257,6 +279,10 @@ function mapPanel() {
   g.font = '900 14px "Noto Sans TC", sans-serif';
   for (const id of LAND_ORDER) { const [x, z] = LANDPOS[id], all = W0.secrets.filter((q2) => q2.land === id), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${SAVE.warps[id] ? '◎' : ''}${N(LANDS[id].name)} ✦${got}/${all.length}`, x, z, '#ffe8a0'); }
   { const all = W0.secrets.filter((q2) => q2.land === 'core'), got = all.filter((q2) => SAVE.secrets[q2.id]).length; label(`${N(['蘑菇村', 'Mushroom Village'])}  ✦${got}/${all.length}`, W0.start[0], W0.start[2] - 16, '#ff9a9a'); }
+  g.font = '900 11px "Noto Sans TC", sans-serif';
+  for (const sd of W0.suits) label(`👕${SAVE.suits[sd.id] ? N(SUITS[sd.id].name) : L('套裝神殿', 'Suit shrine')}`, sd.x, sd.z + 10, SAVE.suits[sd.id] ? '#9af0ff' : '#d0e8f0');
+  for (const r of W0.relics) label(SAVE.relics[r.id] ? `◆${N(RELICS[r.id].where)}` : `？${N(RELICS[r.id].where)}`, r.x, r.z - 8, SAVE.relics[r.id] ? '#ff9af0' : '#e0b0ff');
+  if (SAVE.relics.key) for (const sc of W0.secrets) if (!SAVE.secrets[sc.id]) { g.fillStyle = 'rgba(255,255,255,0.75)'; g.font = '11px sans-serif'; g.fillText('✧', sc.x * K, sc.z * K + 4); }
   for (const sc of W0.secrets) if (SAVE.secrets[sc.id]) { g.fillStyle = '#ffd030'; g.font = '12px sans-serif'; g.fillText('✦', sc.x * K, sc.z * K + 4); }
   const h = S.G.hero, hx = h.x * K, hz = h.z * K; g.save(); g.translate(hx, hz); g.rotate(-h.face + Math.PI); g.fillStyle = '#ff3a2a'; g.strokeStyle = '#ffffff'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, -9); g.lineTo(7, 7); g.lineTo(-7, 7); g.closePath(); g.fill(); g.stroke(); g.restore();
 }
@@ -295,20 +321,26 @@ function onEvent(e) {
     case 'spinup': sound.play('wag'); break;
     case 'power': sound.play(e.kind === 'leaf' ? 'leaf' : 'power'); SAVE.power = G.hero.power; hudItems(); break;
     case 'oneup': SAVE.lives++; sound.play('oneup'); toast('1UP!'); break;
+    case 'hurt': sound.play('hurt'); SAVE.power = G.hero.power; hudItems(); if (e.lost >= 3 && SAVE.suits[SUIT_OF[e.lost]]) toast(L(`${N(SUITS[SUIT_OF[e.lost]].name)}被打掉了！按 R 可以再穿上`, `Your ${N(SUITS[SUIT_OF[e.lost]].name)} came off! Press R to put it back on`)); break;
     case 'die': sound.setSong(null); sound.play('die'); S.deadT = 0.001; break;
     case 'clear': courseClear(e.region, e.card, e.again); break;
     case 'bossdown': sound.play('bosshit'); setTimeout(() => courseClear(e.region, 'star', !!SAVE.cleared[e.region], true), 900); break;
     case 'check': sound.play('check'); toast(L('通過中間點！', 'Checkpoint!')); SAVE.at = G.respawn; store(); break;
     case 'arrive': SAVE.at = G.respawn; if (e.region && PLACES[e.region] && !SAVE.warps[e.region]) { SAVE.warps[e.region] = true; toast(L('村子裡通往這裡的水管打開了！', 'The village pipe to here is open now!')); } store(); break;
     case 'secret': foundSecret(e.id); break;
+    case 'suit': { const sd = SUITS[e.id]; SAVE.power = G.hero.power; puff(G.hero); if (!SAVE.suits[e.id]) { SAVE.suits[e.id] = true; sound.play('relic'); banner(L(`得到${N(sd.name)}！`, `You found the ${N(sd.name)}!`), `${N(sd.what)} · ${L('按 R 隨時換穿', 'press R to change any time')}`); } else { sound.play('suit'); toast(`${L('換上', 'Now wearing the ')}${N(sd.name)}`); } store(); hudItems(); break; }
+    case 'relic': { const r = RELICS[e.id]; SAVE.relics[e.id] = true; G.perks[e.id] = true; sound.play('relic'); setTimeout(() => sound.play('fanfare'), 700);
+      banner(L(`神秘寶物：${N(r.name)}！`, `Mysterious treasure: the ${N(r.name)}!`), `${N(r.what)} · ${relicsN()} / ${RELIC_ORDER.length}`); gateState(G, allRelics()); store(); break; }
+    case 'noair': toast(L('🫧 氣不夠了！快浮上去換氣（青蛙套裝不用換氣）', '🫧 Out of air! Swim up to breathe (the Frog Suit never needs to)')); break;
+    case 'ram': case 'slide': case 'suitlost': sound.play(e.t); break;
     case 'redcoin': sound.play('coin'); toast(`<span style="color:#e8302a">●</span> ${L('紅色金幣', 'Red coin')} ${e.n} / ${e.of}`); if (e.n === e.of) { sound.play('sprout'); toast(L('秘密星星出現了！', 'A secret star has appeared!')); } break;
     case 'dig': sound.play('break'); dust(e.x + 0.5, e.y + 1, e.z + 0.5); break;
     case 'bat': sound.play('wag'); break;
-    case 'jump': case 'stomp': case 'kick': case 'thud': case 'fire': case 'tail': case 'note': case 'hurt': case 'sprout': case 'bosshit': case 'bosshop': case 'bossfire': case 'fly': case 'wag': case 'splash': case 'swim': case 'hop': case 'statue': case 'unstatue': case 'cannon': case 'wand': sound.play(e.t); break;
+    case 'jump': case 'stomp': case 'kick': case 'thud': case 'fire': case 'tail': case 'note': case 'sprout': case 'bosshit': case 'bosshop': case 'bossfire': case 'fly': case 'wag': case 'splash': case 'swim': case 'hop': case 'statue': case 'unstatue': case 'cannon': case 'wand': sound.play(e.t); break;
   }
 }
 // a secret star: every fifth one brings a gift
-const MILESTONES = { 5: ['leaf', 1], 10: ['pwing', 3], 15: ['tanooki', 2], 20: ['pwing', 3], 25: ['frog', 5], 30: ['pwing', 5], 40: ['tanooki', 10] };
+const MILESTONES = { 5: ['flower', 1], 10: ['pwing', 3], 15: ['mush', 2], 20: ['pwing', 3], 25: ['flower', 5], 30: ['pwing', 5], 40: ['pwing', 10], 50: ['pwing', 10] };
 function foundSecret(id) {
   if (SAVE.secrets[id]) return; SAVE.secrets[id] = true; S.G.found[id] = true;
   const n = secretsN(), all = W0.secrets.length; sound.play('fanfare');
@@ -335,6 +367,7 @@ function courseClear(region, card, again, boss) {
 function popCoin(x, y, z) { const m = makeCoinPop(); m.position.set(x + 0.5, y + 1.2, z + 0.5); scene.add(m); anims.push({ m, t: 0, kind: 'coin', y0: y + 1.2 }); }
 function bumpBlock(x, y, z, down) { const k = look(S.G.L, x, y, z); if (!k) return; const m = tileBox(k === 'grass' ? 'dirt' : k); m.position.set(x + 0.5, y + 0.5, z + 0.5); m.scale.setScalar(1.03); scene.add(m); anims.push({ m, t: 0, kind: 'bump', y0: y + 0.5, dir: down ? -1 : 1 }); }
 function debris(x, y, z) { for (let i = 0; i < 6; i++) { const m = box(0.35, 0.35, 0.35, '#c8641e', x + 0.5, y + 0.5, z + 0.5); scene.add(m); const a = i / 6 * Math.PI * 2; anims.push({ m, t: 0, kind: 'bit', vx: Math.cos(a) * 3, vz: Math.sin(a) * 3, vy: i % 2 ? 12 : 8 }); } }
+function puff(h) { for (let i = 0; i < 10; i++) { const m = box(0.18, 0.18, 0.18, ['#ffffff', '#ffe060', '#ff9ad0'][i % 3], h.x + h.w / 2, h.y + 1, h.z + h.d / 2); scene.add(m); const a = i / 10 * Math.PI * 2; anims.push({ m, t: 0, kind: 'bit', vx: Math.cos(a) * 4, vz: Math.sin(a) * 4, vy: 6 }); } }
 function dust(x, y, z) { for (let i = 0; i < 8; i++) { const m = box(0.25, 0.25, 0.25, '#f0e8d8', x, y + 0.2, z); scene.add(m); const a = i / 8 * Math.PI * 2; anims.push({ m, t: 0, kind: 'bit', vx: Math.cos(a) * 5, vz: Math.sin(a) * 5, vy: 3 }); } }
 function stepAnims(dt) {
   for (let i = anims.length - 1; i >= 0; i--) {
@@ -349,7 +382,7 @@ function syncEntities(dt) {
   const G = S.G, seen = new Set(), h = G.hero, near = (o) => Math.abs(o.x - h.x) < 70 && Math.abs(o.z - h.z) < 70;
   const sync = (list, make, pose) => { for (const o of list) { if (!near(o)) continue; seen.add(o); let m = ents.get(o); if (!m) { m = make(o); scene.add(m); ents.set(o, m); } pose(m, o); } };
   sync(G.enemies, (e) => shade(makeEnemy(e)), (m, e) => poseEnemy(m, e, dt, S.t));
-  sync(G.items, (it) => shade(makeItem(it.kind)), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.z + it.d / 2); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
+  sync(G.items, (it) => shade(makeItem(it.kind, it)), (m, it) => { m.position.set(it.x + it.w / 2, it.y, it.z + it.d / 2); if (m.userData.spin) m.userData.spin.rotation.y = S.t * 1.6; if (m.userData.sparks) m.userData.sparks.forEach((sp, i) => { const a = S.t * 2 + i * Math.PI / 2; sp.position.set(Math.cos(a) * 0.55, 0.5 + Math.sin(S.t * 3 + i) * 0.25, Math.sin(a) * 0.55); }); if (it.kind === 'leaf') m.rotation.z = Math.sin(it.t * 3) * 0.5; else m.rotation.y = it.kind === 'flower' ? Math.sin(S.t * 3) * 0.4 : 0; });
   sync(G.reds.flatMap((r) => r.coins.filter((c) => !c.got)), () => makeRedCoin(), (m, c) => { m.position.set(c.x + 0.35, c.y + 0.5, c.z + 0.35); m.rotation.y = S.t * 3; });
   sync(G.fire, () => makeFireball(), (m, f) => { m.position.set(f.x + f.w / 2, f.y + f.h / 2, f.z + f.d / 2); });
   sync(G.shots, (s) => makeShot(s.kind), (m, s) => { m.position.set(s.x + 0.3, s.y + 0.2, s.z + 0.3); m.rotation.y = Math.atan2(s.vx, s.vz) + Math.PI / 2; });
@@ -358,6 +391,7 @@ function syncEntities(dt) {
 const STEP = 1 / 120;
 function worldStep(dt, held, edge, digital, stick) {
   if (edge.swap) swapBro();
+  if (edge.suit && !S.panel && S.warpT <= 0) cycleSuit();
   const G = S.G, h = G.hero;
   if (edge.pause) return menuPanel();
   if (edge.items) return itemsPanel();
@@ -437,7 +471,7 @@ function placeCamera(dt) {
   sun.position.set(S.camT.x - 14, S.camT.y + 40, S.camT.z + 18); sun.target.position.copy(S.camT);
   // the sky and the fog: dark in the cave and the fortress, blue under the sea
   const inside = S.region && (S.region.theme === 'cave' || S.region.theme === 'fort') && (COURSES[S.region.id] || null);
-  setSky(h.swimming ? (h.y < SEA - 70 ? 'abyss' : h.y < SEA - 28 ? 'deep' : 'under') : inside ? S.region.theme : S.region ? (S.region.sky || (S.region.theme === 'fort' ? 'grass' : S.region.theme)) : 'grass');
+  setSky(h.swimming ? (h.inLava ? 'molten' : h.y < SEA - 70 ? 'abyss' : h.y < SEA - 28 ? 'deep' : 'under') : inside ? S.region.theme : S.region ? (S.region.sky || (S.region.theme === 'fort' ? 'grass' : S.region.theme)) : 'grass');
   const fl = floorBelow(G.L, hx, h.y + 0.1, hz); blob.visible = !h.dead && fl > -50; blob.position.set(hx, fl + 0.03, hz); blob.scale.setScalar(Math.max(0.4, 1 - Math.max(0, h.y - fl) * 0.06));
 }
 
@@ -468,12 +502,12 @@ function frame(now) {
 }
 
 // ---------------------------------------------------------------- start
-const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移動 · 右搖桿 轉視角 · A 跳／游泳（有尾巴時在空中連按可以飛）· B／X 跑步＋攻擊 · Y／LT 屁股蹬地、狸貓石像、青蛙下潛、站在水管上進水管 · Back 道具 · LB 地圖 · Start 選單', 'Controller: left stick move · right stick camera · A jump / swim (with a tail, tap in the air to fly) · B / X run and attack · Y / LT ground pound, Tanooki statue, Frog dive, go down a pipe · Back items · LB map · Start menu')
-  : matchMedia('(pointer: coarse)').matches ? L('觸控：方向鈕 移動 · 拖曳畫面 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B 跑步＋攻擊 · ⤓ 屁股蹬地／進水管 · 點背包用道具', 'Touch: arrows move · drag the screen to turn the camera · A jump (with the leaf, tap in the air to fly) · B run and attack · ⤓ ground pound / go down a pipe · tap the bag for items')
-    : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（有尾巴時在空中連按可以飛；水裡按跳游泳）· Shift／X 跑步＋丟火球／甩尾巴 · C：空中屁股蹬地；站在水管上進水管；狸貓裝按住變石像；青蛙裝下潛 · Q／E 或拖曳 轉視角 · Tab 道具 · M 地圖 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with a tail, tap in the air to fly; in water, jump swims) · Shift / X run, throw fire, swing your tail · C: ground pound in the air; go down a pipe you stand on; hold for the Tanooki statue; dive as a frog · Q / E or drag: camera · Tab items · M map · Esc menu');
+const helpText = () => PAD.used || PAD.connected ? L('控制器：左搖桿 移動 · 右搖桿 轉視角 · A 跳／游泳（有尾巴時在空中連按可以飛）· B／X 跑步＋攻擊 · Y／LT 屁股蹬地、狸貓石像、青蛙下潛、站在水管上進水管 · R3 換套裝 · RB 換兄弟 · Back 道具 · LB 地圖 · Start 選單', 'Controller: left stick move · right stick camera · A jump / swim (with a tail, tap in the air to fly) · B / X run and attack · Y / LT ground pound, Tanooki statue, Frog dive, go down a pipe · R3 change suit · RB swap brother · Back items · LB map · Start menu')
+  : matchMedia('(pointer: coarse)').matches ? L('觸控：方向鈕 移動 · 拖曳畫面 轉視角 · A 跳（拿著葉子在空中連按可以飛）· B 跑步＋攻擊 · ⤓ 屁股蹬地／進水管 · 👕 換套裝 · ⇄ 換兄弟 · 點背包用道具', 'Touch: arrows move · drag the screen to turn the camera · A jump (with the leaf, tap in the air to fly) · B run and attack · ⤓ ground pound / go down a pipe · 👕 change suit · ⇄ swap brother · tap the bag for items')
+    : L('方向鍵／WASD 移動 · 空白鍵／Z 跳（有尾巴時在空中連按可以飛；水裡按跳游泳）· Shift／X 跑步＋丟火球／甩尾巴 · C：空中屁股蹬地；站在水管上進水管；狸貓裝按住變石像；青蛙裝下潛 · R 換套裝 · V 換兄弟 · Q／E 或拖曳 轉視角 · Tab 道具 · M 地圖 · Esc 選單', 'Arrows / WASD move · Space / Z jump (with a tail, tap in the air to fly; in water, jump swims) · Shift / X run, throw fire, swing your tail · C: ground pound in the air; go down a pipe you stand on; hold for the Tanooki statue; dive as a frog · R change suit · V swap brother · Q / E or drag: camera · Tab items · M map · Esc menu');
 function staticText() {
   document.documentElement.lang = EN() ? 'en' : 'zh-Hant';
-  $('t-sub').textContent = L('Josh 和 Jasper 兄弟的葉葉國是一個巨大的開放 3D 世界！蘑菇村、雪原、巨菇森林、沙漠金字塔、火山、南方群島、高聳入雲的天梯峰和深淵大洋，爬雲梯上天、潛進海底、鑽進山洞。收集每一關的星星，還有藏在各地的秘密星星：看不見的方塊、地上的 X、紅色金幣、裂開的磚牆、沒有名牌的水管……（簡單模式）', 'All of Leafy Land is one huge open 3D world! Josh and Jasper’s Leafy Land: Mushroom Village, the snowfields, the giant mushroom forest, the desert pyramid, the volcano, the southern isles, the towering Skyreach Peak and the Abyssal Sea; climb cloud stairs, dive under the sea, burrow through mountains. Win every course’s star, and hunt the secret stars hidden everywhere: invisible blocks, an X on the ground, red coins, cracked brick walls, pipes with no name… (Easy mode)');
+  $('t-sub').textContent = L('Josh 和 Jasper 兄弟的葉葉國是一個巨大的開放 3D 世界！蘑菇村、雪原、巨菇森林、沙漠金字塔、火山、南方群島、高聳入雲的天梯峰和深淵大洋，爬雲梯上天、潛進海底、鑽進山洞。去各地的神殿拿套裝：葉子套裝能飛、青蛙套裝潛進深海、岩漿套裝在岩漿裡游泳、登山套裝爬上峭壁、狸貓套裝變石像，再去五個神秘地點找神秘寶物。收集每一關的星星，還有藏在各地的秘密星星：看不見的方塊、地上的 X、紅色金幣、裂開的磚牆、沒有名牌的水管……（簡單模式）', 'All of Leafy Land is one huge open 3D world! Josh and Jasper’s Leafy Land: Mushroom Village, the snowfields, the giant mushroom forest, the desert pyramid, the volcano, the southern isles, the towering Skyreach Peak and the Abyssal Sea; climb cloud stairs, dive under the sea, burrow through mountains. Fetch the suits from their shrines: the Leaf Suit flies, the Frog Suit dives to the deep sea, the Lava Suit swims through lava, the Climbing Suit scales cliffs, the Tanooki Suit turns to stone; then seek the mysterious treasures in five mysterious places. Win every course’s star, and hunt the secret stars hidden everywhere: invisible blocks, an X on the ground, red coins, cracked brick walls, pipes with no name… (Easy mode)');
   $('t-play').textContent = hadSave ? L('繼續冒險', 'Continue') : L('開始', 'Start');
   pickBro(SAVE.bro, true);
   $('t-lang').textContent = EN() ? '中文' : 'English';
@@ -496,7 +530,7 @@ function play() {
   setTimeout(() => { $('title').hidden = true; }, 900);
   S.mode = 'world'; $('hud').hidden = false; $('mapui').hidden = false; prompt(''); hud(); hudItems();
   S.region = null; S.camT = null; cam.yaw = Math.PI * 0.5;
-  if (!hadSave) setTimeout(() => toast(L('歡迎來到蘑菇村！往東走有第一關，村子裡的水管可以傳送。', 'Welcome to Mushroom Village! The first course is east; the village pipes take you places.')), 1500);
+  if (!hadSave) setTimeout(() => toast(L('歡迎來到蘑菇村！往東走有第一關，村子裡的水管可以傳送。去各地的神殿拿套裝吧！', 'Welcome to Mushroom Village! The first course is east; the village pipes take you places. Go find the suits in their shrines!')), 1500);
 }
 $('t-play').onclick = play;
 $('t-lang').onclick = () => setLang(EN() ? 'zh' : 'en');

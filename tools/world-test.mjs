@@ -1,6 +1,6 @@
 // node tools/world-test.mjs — the open world: it builds, you can stand in the village, every course set into the
 // world can still be finished from its start, the pipes and stairs are where they should be
-import { T, newRun, step, tileAt, isSolid, floorBelow } from '../js/game.js';
+import { T, newRun, step, tileAt, isSolid, floorBelow, SUITS, RELIC_ORDER } from '../js/game.js';
 import { LEVELS } from '../js/levels.js';
 import { buildWorld, COURSES, ORDER, LAND_ORDER, airshipCells, regionAt, GY, SEA } from '../js/world.js';
 
@@ -74,4 +74,38 @@ ok('every unmarked pipe leads somewhere and back', W0.warps.filter((p) => p.warp
 { const g = W0.goals.find((q) => q.region === '1-D'), st = W0.checks.find((c) => c.region === '1-D' && c.start), G = newRun(W0, { power: 5, god: true, at: [st.x + 6, st.y, st.z] }), h = G.hero; let done = false, t = 0;
   for (; t < 120 && !done; t += DT) { const dx = g.x + 1 - h.x, dz = g.z - h.z, l = Math.hypot(dx, dz) || 1, deep = h.y > g.y + 0.5; for (const e of step(G, { ...NONE, mx: dx / l * (deep && l < 3 ? 0 : 1), mz: dz / l * (deep && l < 3 ? 0 : 1), pound: deep, jump: !deep && h.swimming }, DT)) if (e.t === 'clear' && e.region === '1-D') done = true; }
   ok('the deep trench can be dived to the bottom and finished', done, done ? `${t.toFixed(0)} s, ${(SEA - g.y).toFixed(0)} blocks down` : `stuck at y ${h.y.toFixed(1)} (${(h.x - g.x).toFixed(1)}, ${(h.z - g.z).toFixed(1)} from the goal)`); }
+// ---------------------------------------------------------------- suits, the mysterious places and their treasures
+ok('every suit has a shrine', Object.keys(SUITS).every((k) => W0.suits.some((q) => q.id === k)));
+{ const bad = W0.suits.filter((q) => isSolid(tileAt(W0, q.x, q.y, q.z)) || isSolid(tileAt(W0, q.x, q.y + 1, q.z)) || !isSolid(tileAt(W0, q.x, q.y - 1, q.z))).map((q) => q.id); ok('every shrine has a floor and room to stand', !bad.length, bad.join(' ')); }
+{ const q = W0.suits.find((x) => x.id === 'climb'), G = newRun(W0, { at: [q.x, q.y, q.z] }); let got = null; for (let i = 0; i < 60; i++) for (const e of step(G, NONE, DT)) if (e.t === 'suit') got = e.id; ok('stepping into a shrine puts the suit on', got === 'climb' && G.hero.power === SUITS.climb.power); }
+ok('five mysterious treasures', RELIC_ORDER.every((k) => W0.relics.some((r) => r.id === k)));
+{ const bad = W0.relics.filter((r) => isSolid(tileAt(W0, r.x, r.y, r.z))).map((r) => r.id); ok('no treasure is buried', !bad.length, bad.join(' ')); }
+const relic = (id) => W0.relics.find((r) => r.id === id);
+const goFor = (G, id, secs, inp) => { let got = false, t = 0; for (; t < secs && !got && !G.hero.dead; t += DT) for (const e of step(G, inp(G.hero), DT)) if (e.t === 'relic' && e.id === id) got = true; return { got, t }; };
+const toward = (h, x, z) => { const dx = x + 0.5 - (h.x + h.w / 2), dz = z + 0.5 - (h.z + h.d / 2), l = Math.hypot(dx, dz) || 1; return l < 0.3 ? [0, 0] : [dx / l, dz / l]; };
+// the lava temple: in the lava suit you sink through the crater's lava to the treasure; without it you are gone
+{ const r = relic('heart'), at = [r.x, r.y + 15.5, r.z];
+  const G = newRun(W0, { power: 6, at: [r.x + 4, r.y + 15.5, r.z + 3] }), res = goFor(G, 'heart', 30, (h) => { const [mx, mz] = h.y > r.y + 2 ? toward(h, r.x + 4, r.z) : toward(h, r.x, r.z); return { ...NONE, mx, mz }; });
+  ok('the lava suit swims down through the crater to the lava temple', res.got, res.got ? `${res.t.toFixed(0)} s` : `at y ${G.hero.y.toFixed(1)}, dead ${G.hero.dead}`);
+  const G2 = newRun(W0, { power: 1, at }); for (let i = 0; i < 240; i++) step(G2, NONE, DT); ok('without the lava suit, the lava is deadly', G2.hero.dead);
+  const G3 = newRun(W0, { power: 1, at, perks: { heart: true } }); let n = 0; for (let i = 0; i < 600; i++) { const [mx, mz] = toward(G3.hero, r.x, r.z + 3); for (const e of step(G3, { ...NONE, mx, mz }, DT)) if (e.t === 'hurt') n++; } ok('with the heart of fire, lava throws you out instead (onto a stepping stone)', !G3.hero.dead && n >= 1 && G3.hero.onGround, `hurt ${n}`); }
+// the eyrie: the climbing suit walks straight up the pillar to the nest
+{ const r = relic('feather'), ex = r.x, ez = r.z, g = W0.surf(ex - 6, ez);
+  const G = newRun(W0, { power: 7, at: [ex - 6, g, ez] }), res = goFor(G, 'feather', 40, (h) => { const [mx, mz] = toward(h, ex, ez); return { ...NONE, mx, mz }; });
+  ok('the climbing suit climbs the eyrie to its treasure', res.got, res.got ? `${res.t.toFixed(0)} s, ${r.y - g} blocks up` : `stuck at y ${G.hero.y.toFixed(1)} of ${r.y}`);
+  const G2 = newRun(W0, { power: 1, at: [ex - 6, g, ez] }); goFor(G2, 'feather', 8, (h) => { const [mx, mz] = toward(h, ex, ez); return { ...NONE, mx, mz }; }); ok('without it the pillar cannot be climbed', G2.hero.y < g + 4); }
+// the grotto: air runs out deep down, unless you wear the frog suit, which dives in through the top of the dome
+{ const r = relic('pearl'), at = [r.x, r.y + 12, r.z];
+  const G = newRun(W0, { power: 1, at }); let noair = false; for (let t = 0; t < 25 && !noair; t += DT) for (const e of step(G, NONE, DT)) if (e.t === 'noair') noair = true; ok('deep under the sea the air runs out', noair);
+  const G2 = newRun(W0, { power: 5, at }), res = goFor(G2, 'pearl', 30, (h) => { const [mx, mz] = toward(h, r.x, r.z); return { ...NONE, mx, mz, pound: true }; });
+  ok('the frog suit dives into the mermaid grotto for its pearl', res.got, res.got ? `${res.t.toFixed(0)} s, ${SEA - r.y} blocks down` : `at y ${G2.hero.y.toFixed(1)}`); }
+// the sky garden is within a leaf flight of the lighthouse beach
+{ const r = relic('fruit'); ok('the sky garden can be flown to', r.y - (GY + 3) <= 38, `${r.y - GY} blocks above the plains`); }
+// the haunted manor: a ghost freezes while you look at it and creeps up when you turn away
+{ const gh = W0.ents.find((e) => e.t === 'h'), G = newRun(W0, { at: [gh.x + 4, gh.y, gh.z] }), h = G.hero, e = G.enemies.find((q) => q.kind === 'ghost' && q.spawn === gh);
+  h.face = -Math.PI / 2; for (let i = 0; i < 60; i++) step(G, NONE, DT); const x1 = e.x; for (let i = 0; i < 60; i++) step(G, NONE, DT);
+  const still = Math.abs(e.x - x1) < 0.05; h.face = Math.PI / 2; for (let i = 0; i < 60; i++) step(G, NONE, DT);
+  ok('a ghost stops when you look at it and comes when you turn away', still && e.x > x1 + 0.5, `${(e.x - x1).toFixed(2)}`);
+  const r = relic('key'); ok('the manor treasure sits behind a cracked brick wall', tileAt(W0, r.x + 3, r.y, r.z) === T.BRICK); }
+ok('the mystery gate is sealed', W0.gate.door.every(([x, y, z]) => tileAt(W0, x, y, z) === T.HARD));
 console.log(fails ? `${fails} failed` : 'all passed'); process.exit(fails ? 1 : 0);

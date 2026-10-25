@@ -8,7 +8,17 @@ A 3D platformer for the browser in the spirit of Super Mario Bros. 3 and its 3D 
 
 ## The game
 
-- **Two brothers, Josh and Jasper.** Pick one on the title screen and swap any time (V, RB on a controller, ⇄ on touch); the other brother walks along in your footsteps. Josh, the big brother, runs a little faster; Jasper, the little brother, jumps a little higher. Both are drawn cute and round: big heads, big sparkly eyes, rosy cheeks.
+- **Suits, found in shrines.** Six suits wait in little golden-roofed shrines around Leafy Land; walk in and you put it on, and once found you can change suits any time (R, R3 on a controller, 👕 on touch, or the bag). Each opens up a different part of the world:
+  - **Leaf Suit** (Giant Mushroom Forest): a raccoon tail; fill the P-meter and fly, float down slowly, spin your tail.
+  - **Frog Suit** (Coral Coast): the fastest swimmer and never short of air. Deep under the sea everyone else runs out of air, so it is the one for the deep trench and the abyss.
+  - **Lava Suit** (below Mount Ember): swim through lava like water, shrug off fire, throw fireballs.
+  - **Climbing Suit** (foot of Skyreach Peak): walk into any wall to climb straight up it (jump to leap off), and no slipping on ice.
+  - **Tanooki Suit** (desert town): flies, and turns to stone.
+  - **Golden Suit**: all of their powers at once, behind the Mystery Gate.
+  A hit knocks a suit off, but you can put it straight back on. Item blocks and Mushroom Houses now give mushrooms, fire flowers and P-wings.
+- **Five mysterious places, each with a mysterious treasure** that helps for good: the **Lava Temple** at the bottom of the crater's lava lake (Heart of Fire: lava throws you out instead of ending your life), the **Eagle's Eyrie** on a sheer pillar of rock with no path up (Eagle Feather: both brothers jump higher), the **Mermaid Grotto**, a coral dome on the deepest sea floor (Mermaid Pearl: faster swimming, three times the air), the **Sky Garden** floating high over the southern sea (Rainbow Fruit: coins fly to you) and the **Haunted Manor**, three dark floors of shy ghosts with a cracked wall at the top (Moonlight Key: the map shows the stars you have not found). Find all five and the **Mystery Gate** in the village opens on the Golden Suit.
+- **New monsters:** ghosts that creep up while your back is turned and hide their faces when you look; glowing jellyfish drifting in the deep; lava bubbles leaping out of the lava; mountain rams that lower their horns and charge; penguins that throw themselves on their bellies to slide at you.
+- **Two brothers, Josh and Jasper.** Pick one on the title screen and swap any time (V, RB on a controller, ⇄ on touch); the other brother walks along in your footsteps. Josh, the big brother, runs a little faster; Jasper, the little brother, jumps a little higher. Both are drawn like picture-book children: big round heads, large shining eyes with a dark lash line, a small smile, rosy cheeks, jackets over white T-shirts and chunky sneakers.
 - **Skyreach Peak**, a giant snowy mountain ten times the height of the old one (about 220 blocks), with a trail spiralling up past rest stops to a shrine at the summit; you can see it from across the island.
 - **The Deep Trench (1-D)**: a dock on the open sea, and a dive of more than a hundred blocks down a coral shaft to a sunken temple. The deeper you go, the darker the water. Around it lies the Abyssal Sea, with a sunken ship on its floor.
 - **One huge open world.** All of Leafy Land is a single 3D island, 816 × 816 blocks, to roam freely. In the middle-west lies the old heartland (meadows, hills, voxel trees you can climb onto, the mountain, the Lava Castle and Coral Bay), with every course of the old world map set where it belongs:
@@ -25,8 +35,6 @@ A 3D platformer for the browser in the spirit of Super Mario Bros. 3 and its 3D 
 - **Items** can be used any time from your bag (Tab, or tap it); the P-wing gives a minute of free flight.
 - Knocked-out baddies come back after a while, when you are far away, and wander the open land too.
 - **Power-ups:** the Mushroom makes you big, the Fire Flower throws bouncing fireballs the way you face, and the Super Leaf gives you a raccoon tail. Spin the tail all around you, tap jump in the air to float down slowly, or fill the P-meter by running and then fly.
-- **Tanooki Suit:** everything the tail does, and hold the pound button on the ground to turn into a stone statue that nothing can hurt.
-- **Frog Suit:** the fastest swimmer: swim in any direction, hold jump to rise and pound to dive. On land it hops along slowly.
 - **P-Wing:** use it on the map and the P-meter never runs out for one whole level.
 - **Water:** in the sea you sink slowly and stroke up with jump; leap out at the surface. Fish chase you there.
 - **The airship:** a wooden ship in the sky with cannons whose balls you can stomp, and a little turtle prince who throws magic rings.

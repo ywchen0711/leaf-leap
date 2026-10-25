@@ -10,13 +10,37 @@ export const T = { EMPTY: 0, GROUND: 1, BRICK: 2, QCOIN: 3, QLEAF: 4, USED: 5, H
 const SOLID = new Uint8Array(64); for (const t of [1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 13, 15, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29, 30, 31, 32, 33, 34, 35, 36]) SOLID[t] = 1;
 export const isSolid = (t) => SOLID[t] === 1;
 export const isQ = (t) => t === T.QCOIN || t === T.QLEAF || t === T.Q1UP || t === T.QFLOWER || t === T.QTANOOKI || t === T.QFROG;
-// powers: 0 small, 1 big, 2 fire, 3 raccoon (the leaf), 4 tanooki suit, 5 frog suit
-export const POWER = { SMALL: 0, BIG: 1, FIRE: 2, LEAF: 3, TANOOKI: 4, FROG: 5 };
-const hasTail = (h) => h.power === POWER.LEAF || h.power === POWER.TANOOKI;
+// powers: 0 small, 1 big, 2 fire, then the suits: 3 leaf, 4 tanooki, 5 frog, 6 lava, 7 climbing, 8 gold (all of them at once)
+export const POWER = { SMALL: 0, BIG: 1, FIRE: 2, LEAF: 3, TANOOKI: 4, FROG: 5, LAVA: 6, CLIMB: 7, GOLD: 8 };
+const hasTail = (h) => h.power === POWER.LEAF || h.power === POWER.TANOOKI || h.power === POWER.GOLD;
+export const swimsFast = (h) => h.power === POWER.FROG || h.power === POWER.GOLD;   // and never runs out of air
+export const lavaProof = (h) => h.power === POWER.LAVA || h.power === POWER.GOLD;   // swims in lava, fire does not hurt
+export const climbs = (h) => h.power === POWER.CLIMB || h.power === POWER.GOLD;     // walks up walls, does not slip on ice
+export const throwsFire = (h) => h.power === POWER.FIRE || h.power === POWER.LAVA || h.power === POWER.GOLD;
+// the suits are found in shrines around the world, and once found can be worn again any time
+export const SUITS = {
+  leaf: { power: 3, name: ['葉子套裝', 'Leaf Suit'], what: ['跑滿 P 就能飛上天、在空中慢慢飄、甩尾巴打敵人', 'Fill the P-meter to fly, float down slowly, spin your tail'] },
+  frog: { power: 5, name: ['青蛙套裝', 'Frog Suit'], what: ['游得最快、不用換氣，能潛到最深的海底', 'The fastest swimmer, never short of air: dive to the deepest sea floor'] },
+  lava: { power: 6, name: ['岩漿套裝', 'Lava Suit'], what: ['能在岩漿裡游泳、不怕火，還能丟火球', 'Swim through lava, shrug off fire, and throw fireballs'] },
+  climb: { power: 7, name: ['登山套裝', 'Climbing Suit'], what: ['走向牆壁就能一直往上爬，冰上也不會滑', 'Walk into any wall to climb straight up it; no slipping on ice'] },
+  tanooki: { power: 4, name: ['狸貓套裝', 'Tanooki Suit'], what: ['會飛，按住蹬地鍵還能變成石像', 'Flies like the leaf, and turns to stone when you hold pound'] },
+  gold: { power: 8, name: ['黃金套裝', 'Golden Suit'], what: ['所有套裝的能力全部都有！', 'Every suit’s powers, all at once!'] },
+};
+export const SUIT_ORDER = ['leaf', 'frog', 'lava', 'climb', 'tanooki', 'gold'];
+export const SUIT_OF = Object.fromEntries(Object.entries(SUITS).map(([k, v]) => [v.power, k]));
+// the mysterious treasures, one in each mysterious place; each one helps for good, and all five open the gate in the village
+export const RELICS = {
+  heart: { name: ['火焰之心', 'Heart of Fire'], where: ['熔岩神殿', 'the Lava Temple'], what: ['掉進岩漿不會馬上出局，會被彈出來', 'Lava no longer ends your life at once: it throws you out'] },
+  feather: { name: ['老鷹羽毛', 'Eagle Feather'], where: ['鷹之巢', 'the Eagle’s Eyrie'], what: ['兩兄弟都跳得更高了', 'Both brothers jump higher'] },
+  pearl: { name: ['人魚珍珠', 'Mermaid Pearl'], where: ['人魚洞窟', 'the Mermaid Grotto'], what: ['在水裡游得更快，憋氣時間變三倍', 'Swim faster, and hold your breath three times as long'] },
+  fruit: { name: ['彩虹果實', 'Rainbow Fruit'], where: ['天空花園', 'the Sky Garden'], what: ['附近的金幣會自己飛過來', 'Coins nearby fly to you'] },
+  key: { name: ['月光鑰匙', 'Moonlight Key'], where: ['幽靈古宅', 'the Haunted Manor'], what: ['地圖上會顯示還沒找到的秘密星星', 'The map shows the secret stars you have not found'] },
+};
+export const RELIC_ORDER = ['heart', 'feather', 'pearl', 'fruit', 'key'];
 // tuning, in blocks and seconds
 export const PH = { walk: 6, run: 9.5, prun: 12, accel: 32, airAccel: 18, fric: 34, airFric: 6, jump: 16, jumpRun: 0.2, gHold: 34, g: 58, fall: 22,
   stomp: 10, stompHold: 15, fly: 9, flyTime: 4.5, wagFall: 2.4, note: 13, noteHold: 19, pound: 28,
-  swim: 3.6, frogSwim: 7.5, frogWalk: 6, stroke: 5.5, sink: 3, waterG: 10, statueTime: 4 };
+  swim: 3.6, frogSwim: 7.5, frogWalk: 6, stroke: 5.5, sink: 3, waterG: 10, statueTime: 4, climb: 6, air: 16 };
 
 // the grid: index ((y * d) + z) * w + x; outside the sides is an invisible wall, below is a pit, above is open sky
 export const tileAt = (L, x, y, z) => (x < 0 || x >= L.w || z < 0 || z >= L.d ? T.HARD : y < 0 || y >= L.h ? T.EMPTY : L.get ? L.get(x, y, z) : L.tiles[(y * L.d + z) * L.w + x]);
@@ -48,6 +72,7 @@ function sweep(L, o, axis, dist) {
 // the height of the floor under a point (for shadows, ledges and the bot)
 export function floorBelow(L, x, y, z) { const cx = Math.floor(x), cz = Math.floor(z); for (let yy = Math.min(L.h - 1, Math.floor(y)); yy >= 0; yy--) { const t = tileAt(L, cx, yy, cz); if (isSolid(t) || t === T.CLOUD) return yy + 1; if (t === T.LAVA) return -1; } return -99; }
 export const inWater = (L, o) => tileAt(L, Math.floor(o.x + o.w / 2), Math.floor(o.y + Math.min(0.6, o.h * 0.5)), Math.floor(o.z + o.d / 2)) === T.WATER;
+export const inLava = (L, o) => tileAt(L, Math.floor(o.x + o.w / 2), Math.floor(o.y + Math.min(0.6, o.h * 0.5)), Math.floor(o.z + o.d / 2)) === T.LAVA;
 
 // ---------------------------------------------------------------- starting a level
 // def: { id, w, h, d, tiles, ents: [{ t, x, y, z }], start: [x, y, z], goal: [x, y, z] | null, check: [x, y, z] | null, theme }
@@ -55,7 +80,7 @@ export function newRun(def, opts = {}) {
   const L = def.world ? def : { w: def.w, h: def.h, d: def.d, tiles: def.tiles.slice(), theme: def.theme };
   const at = opts.checkpoint && def.check ? def.check : def.start;
   const hero = { hero: true, x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, w: 0.7, d: 0.7, h: 0.9, vx: 0, vy: 0, vz: 0, face: Math.PI / 2, onGround: true, power: 0, inv: 0, pm: 0, flyT: 0, wag: 0, spin: 0,
-    coyote: 0, buffer: 0, dead: false, deadT: 0, prevY: at[1], fireCd: 0, pound: 0, poundT: 0, statue: 0, statueCd: 0, swimming: false, pwing: !!opts.pwing };
+    coyote: 0, buffer: 0, dead: false, deadT: 0, prevY: at[1], fireCd: 0, pound: 0, poundT: 0, statue: 0, statueCd: 0, swimming: false, pwing: !!opts.pwing, air: PH.air, climbT: 0 };
   // the P-wing: a raccoon tail and a P-meter that never runs out, for one level
   setPower(hero, opts.pwing && !hasTail({ power: opts.power || 0 }) ? POWER.LEAF : opts.power || 0);
   const cannons = [];
@@ -65,7 +90,9 @@ export function newRun(def, opts = {}) {
   const G = { def, L, hero, enemies: spawns.map(makeEnemy), items: [], fire: [], shots: [], cannons, t: 0, coins: 0, lives: 0, cleared: null, checked: !!opts.checkpoint,
     god: !!opts.god, ev: [], goal: def.goal ? { x: def.goal[0], y: def.goal[1], z: def.goal[2], w: 1, h: 1, d: 1 } : null, bossDown: false,
     world: !!def.world, goals: def.goals || [], checks: def.checks || [], done: { ...(opts.done || {}) }, respawn: opts.at || def.start, spawns, graves: [],
-    found: { ...(opts.found || {}) }, secretAt: def.secretAt || {}, reds: [] };
+    found: { ...(opts.found || {}) }, secretAt: def.secretAt || {}, reds: [], perks: { ...(opts.perks || {}) } };
+  for (const sd of def.suits || []) if (!sd.locked || opts.gold) G.items.push(suitItem(sd));
+  for (const r of def.relics || []) if (!(opts.relics || {})[r.id]) G.items.push({ kind: 'relic', id: r.id, x: r.x + 0.1, y: r.y + 0.2, z: r.z + 0.1, by: r.y + 0.2, w: 0.8, h: 0.9, d: 0.8, vx: 0, vy: 0, vz: 0, rise: 0, t: 0, dx: 0, dz: 0 });
   for (const sc of def.secrets || []) if (sc.kind === 'free' && !G.found[sc.id]) G.items.push(secretItem(sc.id, sc.x, sc.y, sc.z, false));
   for (const set of def.reds || []) if (!G.found[set.id]) G.reds.push({ id: set.id, center: set.center, coins: set.coins.map(([x, y, z]) => ({ x: x + 0.15, y: y + 0.1, z: z + 0.15, w: 0.7, h: 0.8, d: 0.7, got: false })), n: 0 });
   if (opts.at) { hero.x = opts.at[0] + 0.15; hero.y = opts.at[1]; hero.z = opts.at[2] + 0.15; hero.prevY = hero.y; }
@@ -73,11 +100,13 @@ export function newRun(def, opts = {}) {
 }
 // a secret star: it rises out of where it was hidden, then floats there, turning
 export function secretItem(id, x, y, z, rise) { return { kind: 'secret', id, x: x + 0.05, y, z: z + 0.05, w: 0.9, h: 0.9, d: 0.9, vx: 0, vy: 0, vz: 0, rise: rise ? 0.8 : 0, by: y + (rise ? 1.28 : 0), t: 0, dx: 0, dz: 0 }; }
+// a suit on its shrine's pedestal: it stays there, so you can come back for it
+export function suitItem(sd) { return { kind: 'suit', suit: sd.id, x: sd.x + 0.1, y: sd.y + 0.5, z: sd.z + 0.1, by: sd.y + 0.5, w: 0.8, h: 1, d: 0.8, vx: 0, vy: 0, vz: 0, rise: 0, t: 0, dx: 0, dz: 0, cool: 0 }; }
 function revealSecret(G, x, y, z) { const id = G.secretAt[x + ',' + y + ',' + z]; if (id && !G.found[id]) { G.items.push(secretItem(id, x, y, z, true)); G.ev.push({ t: 'sprout', x, y, z, secret: true }); return true; } return false; }
 export function setPower(h, p) { h.power = p; h.h = p ? 1.75 : 0.9; }
 // back on your feet at a checkpoint, as you were but small
 export function respawn(G, at, power = 0) {
-  const h = G.hero; Object.assign(h, { x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, vx: 0, vy: 0, vz: 0, dead: false, deadT: 0, inv: 2, pm: 0, flyT: 0, pound: 0, statue: 0, spin: 0, prevY: at[1] }); setPower(h, power);
+  const h = G.hero; Object.assign(h, { x: at[0] + 0.15, y: at[1], z: at[2] + 0.15, vx: 0, vy: 0, vz: 0, dead: false, deadT: 0, inv: 2, pm: 0, flyT: 0, pound: 0, statue: 0, spin: 0, prevY: at[1], air: PH.air, climbT: 0 }); setPower(h, power);
   G.fire = []; G.shots = [];
 }
 
@@ -94,6 +123,12 @@ const ENEMY = {
   s: () => ({ kind: 'walker', spiny: true, w: 0.8, d: 0.8, h: 0.75, speed: 1.9 }),
   b: () => ({ kind: 'bat', w: 0.7, d: 0.7, h: 0.5, speed: 3.4, perch: true }),
   c: () => ({ kind: 'pokey', w: 0.9, d: 0.9, h: 2.4, segs: 3, speed: 0.9 }),
+  // the new ones: a shy ghost, a jellyfish of the deep, a lava bubble, a mountain ram that charges, a penguin that slides
+  h: () => ({ kind: 'ghost', w: 0.8, d: 0.8, h: 0.8, speed: 2.1 }),
+  j: () => ({ kind: 'jelly', w: 0.8, d: 0.8, h: 0.9, speed: 0 }),
+  l: () => ({ kind: 'bubble', w: 0.7, d: 0.7, h: 0.7, speed: 0 }),
+  r: () => ({ kind: 'ram', w: 0.9, d: 0.9, h: 1, speed: 1.4, st: 'walk', stT: 0 }),
+  n: () => ({ kind: 'penguin', w: 0.8, d: 0.8, h: 0.9, speed: 1.8, st: 'walk', stT: 0, cd: 0 }),
 };
 function makeEnemy(e, i) {
   const o = { id: i, spawn: e, region: e.region, skin: e.skin, x: e.x + 0.1, y: e.y, z: e.z + 0.1, vy: 0, dx: -1, dz: 0, alive: true, active: false, onGround: false, inv: 0, grace: 0, t: 0, ...ENEMY[e.t]() };
@@ -145,8 +180,42 @@ function stepEnemy(G, e, dt) {
     e.face = Math.atan2(e.dx, e.dz);
     return;
   }
+  if (e.kind === 'ghost') {
+    // a ghost creeps after you while your back is turned, and stops and hides its face when you look at it
+    const dy = h.y + 0.5 - e.y, d3 = Math.hypot(toH.x, toH.z, dy) || 1, fx = Math.sin(h.face), fz = Math.cos(h.face);
+    e.shy = !h.dead && dist < 16 && (-toH.x * fx - toH.z * fz) / (dist || 1) > 0.3;
+    if (!h.dead && dist < 16 && Math.abs(dy) < 4 && !e.shy) { e.x += toH.x / d3 * e.speed * dt; e.z += toH.z / d3 * e.speed * dt; e.y += dy / d3 * e.speed * dt; }
+    else e.y += Math.sin(e.t * 2 + e.id) * 0.3 * dt;
+    e.face = Math.atan2(toH.x, toH.z); return;
+  }
+  if (e.kind === 'jelly') {
+    // a jellyfish drifts up and down in the deep water; touch it and it stings
+    if (e.baseY == null) { e.baseY = e.y; e.baseX = e.x; } e.y = e.baseY + Math.sin(e.t * 0.9 + e.id) * 1.6; e.x = e.baseX + Math.sin(e.t * 0.35 + e.id) * 0.8; e.face = e.t * 0.2; return;
+  }
+  if (e.kind === 'bubble') {
+    // a lava bubble waits under the lava, then leaps out in a high arc and falls back in
+    if (e.baseY == null) { e.baseY = e.y; e.wait = (e.id % 5) * 0.45; e.out = false; }
+    if (e.wait > 0) { e.wait -= dt; e.y = e.baseY - 1.2; e.out = false; if (e.wait <= 0) { e.vy = 15; e.y = e.baseY; e.out = true; } return; }
+    e.vy -= 30 * dt; e.y += e.vy * dt; e.face = Math.atan2(toH.x, toH.z);
+    if (e.vy < 0 && e.y < e.baseY - 1) e.wait = 1.4 + (e.id % 3) * 0.5;
+    return;
+  }
   let vx, vz;
-  if (e.kind === 'boss') {
+  if (e.kind === 'ram') {
+    // a ram on the mountain lowers its horns when it sees you, then charges; run into a wall and it is dizzy for a while
+    let sp = e.speed;
+    if (e.st === 'walk') { if (!h.dead && dist < 9 && dist > 1 && Math.abs(h.y - e.y) < 2) { e.st = 'aim'; e.stT = 0.7; e.dx = toH.x / dist; e.dz = toH.z / dist; G.ev.push({ t: 'ram', x: e.x, y: e.y, z: e.z }); } }
+    else if (e.st === 'aim') { sp = 0; e.stT -= dt; if (e.stT <= 0) { e.st = 'charge'; e.stT = 1.6; } }
+    else if (e.st === 'charge') { sp = 9; e.stT -= dt; if (e.stT <= 0) { e.st = 'rest'; e.stT = 1.2; } }
+    else { sp = 0; e.stT -= dt; if (e.stT <= 0) e.st = 'walk'; }
+    vx = e.dx * sp; vz = e.dz * sp;
+  } else if (e.kind === 'penguin') {
+    // a penguin waddles about, and throws itself on its belly to slide at you
+    let sp = e.speed; e.cd = Math.max(0, e.cd - dt);
+    if (e.st === 'walk') { if (!h.dead && dist < 8 && dist > 1.5 && Math.abs(h.y - e.y) < 2 && e.cd === 0) { e.st = 'slide'; e.stT = 1.3; e.dx = toH.x / dist; e.dz = toH.z / dist; G.ev.push({ t: 'slide', x: e.x, y: e.y, z: e.z }); } }
+    else { sp = 7.5; e.stT -= dt; if (e.stT <= 0) { e.st = 'walk'; e.cd = 2.2; } }
+    vx = e.dx * sp; vz = e.dz * sp;
+  } else if (e.kind === 'boss') {
     if (dist > 0.1) { e.dx = toH.x / dist; e.dz = toH.z / dist; }
     const sp = e.speed * (e.hp < 2 ? 1.4 : 1);
     vx = e.dx * sp + (e.kx || 0); vz = e.dz * sp + (e.kz || 0); e.kx = approach(e.kx || 0, 0, 8 * dt); e.kz = approach(e.kz || 0, 0, 8 * dt);
@@ -165,6 +234,7 @@ function stepEnemy(G, e, dt) {
   const bounce = (hit, axis) => {
     if (!hit) return;
     if (axis === 'x') e.dx = -e.dx; else e.dz = -e.dz;
+    if (e.kind === 'ram' && e.st === 'charge') { e.st = 'rest'; e.stT = 1.6; e.dizzy = 1.6; G.ev.push({ t: 'thud' }); }
     if (spin) { if (hit.t === T.BRICK) { setTile(G, hit.x, hit.y, hit.z, T.EMPTY); G.ev.push({ t: 'break', x: hit.x, y: hit.y, z: hit.z }); } else if (isQ(hit.t)) hitBlock(G, hit.x, hit.y, hit.z); else G.ev.push({ t: 'thud' }); }
   };
   bounce(sweep(L, e, 'x', vx * dt), 'x'); bounce(sweep(L, e, 'z', vz * dt), 'z');
@@ -191,7 +261,7 @@ function hitBlock(G, x, y, z, fromAbove) {
   if (t === T.QCOIN) { setTile(G, x, y, z, T.USED); G.coins++; G.ev.push({ t: 'coin', x, y, z, pop: true }); }
   else if (t === T.QLEAF || t === T.QFLOWER || t === T.Q1UP || t === T.QTANOOKI || t === T.QFROG) {
     setTile(G, x, y, z, T.USED);
-    const kind = t === T.Q1UP ? 'oneup' : h.power === POWER.SMALL ? 'mush' : { [T.QLEAF]: 'leaf', [T.QFLOWER]: 'flower', [T.QTANOOKI]: 'tanooki', [T.QFROG]: 'frog' }[t];
+    const kind = t === T.Q1UP ? 'oneup' : h.power === POWER.SMALL ? 'mush' : G.world ? 'flower' : { [T.QLEAF]: 'leaf', [T.QFLOWER]: 'flower', [T.QTANOOKI]: 'tanooki', [T.QFROG]: 'frog' }[t];
     const away = { x: x + 0.5 - (h.x + h.w / 2), z: z + 0.5 - (h.z + h.d / 2) }, l = Math.hypot(away.x, away.z);
     G.items.push({ kind, x: x + 0.1, y: y + 0.2, z: z + 0.1, w: 0.8, h: 0.8, d: 0.8, vx: 0, vy: kind === 'leaf' ? 9 : 0, vz: 0, rise: kind === 'leaf' ? 0 : 0.5, bx: x + 0.1, t: 0,
       dx: l > 0.3 ? away.x / l : 1, dz: l > 0.3 ? away.z / l : 0 });
@@ -205,35 +275,40 @@ function hitBlock(G, x, y, z, fromAbove) {
 export function hurt(G) {
   const h = G.hero; if (h.inv > 0 || h.dead || G.cleared || G.god || h.statue > 0) return;
   if (h.power >= 2) setPower(h, 1); else if (h.power === 1) setPower(h, 0); else return die(G);
-  h.inv = 2; h.flyT = 0; G.ev.push({ t: 'hurt' });
+  const lost = h.power; h.inv = 2; h.flyT = 0; G.ev.push({ t: 'hurt', lost });
 }
 export function die(G) { const h = G.hero; if (h.dead) return; h.dead = true; h.deadT = 0; h.vy = 13; h.vx = h.vz = 0; G.ev.push({ t: 'die' }); }
 function powerUp(G, kind) {
   const h = G.hero;
   if (kind === 'oneup') { G.lives++; G.ev.push({ t: 'oneup' }); return; }
   const to = kind === 'mush' ? Math.max(1, h.power) : { flower: 2, leaf: 3, tanooki: 4, frog: 5 }[kind];
-  if (to !== h.power) { setPower(h, to); const top = Math.floor(h.y + h.h); if (isSolid(tileAt(G.L, Math.floor(h.x + h.w / 2), top, Math.floor(h.z + h.d / 2)))) h.y = Math.max(0, top - h.h); }
-  G.ev.push({ t: 'power', kind });
+  wear(G, to); G.ev.push({ t: 'power', kind });
 }
+// put on a power (a suit from the wardrobe, too), ducking down if the ceiling is low
+export function wear(G, to) { const h = G.hero; if (to === h.power) return; setPower(h, to); h.statue = 0; const top = Math.floor(h.y + h.h); if (isSolid(tileAt(G.L, Math.floor(h.x + h.w / 2), top, Math.floor(h.z + h.d / 2)))) h.y = Math.max(0, top - h.h); }
 // inp: { mx, mz (a direction on the ground, length ≤ 1), jump (held), jumpPressed, run (held), runPressed, poundPressed }
 function stepHero(G, inp, dt) {
   const h = G.hero, L = G.L;
   if (h.dead) { h.deadT += dt; if (h.deadT > 0.45) { h.vy -= 38 * dt; h.y += h.vy * dt; } return; }
   if (h.inv > 0) h.inv -= dt; if (h.fireCd > 0) h.fireCd -= dt; if (h.wag > 0) h.wag -= dt; if (h.statueCd > 0) h.statueCd -= dt;
   if (h.pwing) { h.pm = 1; if (h.flyT > 0) h.flyT = Math.max(h.flyT, 1); }
-  const was0 = h.swimming; h.swimming = inWater(L, h);
-  if (h.swimming && !was0) { G.ev.push({ t: 'splash' }); h.pound = 0; h.flyT = 0; }
+  const was0 = h.swimming, wet = inWater(L, h); h.inLava = !wet && lavaProof(h) && inLava(L, h); h.swimming = wet || h.inLava;
+  if (h.swimming && !was0) { G.ev.push({ t: 'splash', lava: h.inLava }); h.pound = 0; h.flyT = 0; }
+  if (G.world && wet && !swimsFast(h) && h.y < (G.def.seaY ?? 16) - 12) {
+    h.air -= dt / (G.perks.pearl ? 3 : 1);
+    if (h.air <= 0) { h.air = PH.air * 0.4; G.ev.push({ t: 'noair' }); hurt(G); }
+  } else h.air = Math.min(PH.air, h.air + dt * 8);
   // the tanooki suit: hold the pound button on the ground to turn to stone (nothing can hurt a statue)
   if (h.power === POWER.TANOOKI && inp.pound && h.onGround && !h.swimming && h.statueCd <= 0 && h.statue <= 0) { h.statue = PH.statueTime; G.ev.push({ t: 'statue' }); }
   if (h.statue > 0) { h.statue -= dt; if (!inp.pound || h.statue <= 0 || h.power !== POWER.TANOOKI) { h.statue = 0; h.statueCd = 0.8; G.ev.push({ t: 'unstatue' }); } }
   const want = Math.min(1, Math.hypot(inp.mx || 0, inp.mz || 0)), pFull = h.pm >= 1;
   // the frog suit hops slowly on land but is the fastest swimmer
-  const max = (h.swimming ? (h.power === POWER.FROG ? PH.frogSwim : PH.swim) : h.power === POWER.FROG ? PH.frogWalk : inp.run ? (pFull ? PH.prun : PH.run) : PH.walk) * want * (h.speedMul || 1);
+  const max = (h.swimming ? (swimsFast(h) ? PH.frogSwim : PH.swim) * (G.perks.pearl ? 1.3 : 1) : h.power === POWER.FROG ? PH.frogWalk : inp.run ? (pFull ? PH.prun : PH.run) : PH.walk) * want * (h.speedMul || 1);
   // steer the velocity towards where the stick points
   if (h.pound || h.statue > 0) { h.vx = h.vz = 0; }
   else {
     const tvx = want > 0.05 ? inp.mx / want * max : 0, tvz = want > 0.05 ? inp.mz / want * max : 0;
-    const ice = h.onGround && h.floorT === T.ICE;
+    const ice = h.onGround && h.floorT === T.ICE && !climbs(h);
     const a = (want > 0.05 ? (h.onGround ? (ice ? 10 : PH.accel) : PH.airAccel) : (h.onGround ? (ice ? 2.5 : PH.fric) : PH.airFric)) * dt;
     const dvx = tvx - h.vx, dvz = tvz - h.vz, dl = Math.hypot(dvx, dvz);
     if (dl <= a) { h.vx = tvx; h.vz = tvz; } else { h.vx += dvx / dl * a; h.vz += dvz / dl * a; }
@@ -246,16 +321,17 @@ function stepHero(G, inp, dt) {
   // swimming: strokes up (the frog swims freely: jump rises, pound dives); jump at the surface to leap out
   if (h.swimming) {
     h.pm = 0; h.flyT = 0;
-    const surface = tileAt(L, Math.floor(h.x + h.w / 2), Math.floor(h.y + h.h + 0.4), Math.floor(h.z + h.d / 2)) !== T.WATER;
+    const above = tileAt(L, Math.floor(h.x + h.w / 2), Math.floor(h.y + h.h + 0.4), Math.floor(h.z + h.d / 2)), surface = above !== T.WATER && above !== T.LAVA;
     if (inp.jumpPressed && surface) { h.vy = PH.jump * 0.85; G.ev.push({ t: 'jump' }); }
-    else if (h.power === POWER.FROG) { const tvy = inp.jump ? 5 : inp.pound ? -5 : -0.6; h.vy = approach(h.vy, tvy, 24 * dt); }
+    else if (swimsFast(h)) { const tvy = inp.jump ? 5 : inp.pound ? -5 : -0.6; h.vy = approach(h.vy, tvy, 24 * dt); }
     else { if (inp.jumpPressed) { h.vy = PH.stroke; G.ev.push({ t: 'swim' }); } h.vy = Math.max(-PH.sink, h.vy - PH.waterG * dt); }
     h.buffer = 0; h.coyote = 0;
   }
   // jumping (a little forgiveness both before landing and after leaving a ledge)
   h.coyote = h.swimming ? 0 : h.onGround ? 0.09 : h.coyote - dt; h.buffer = h.swimming ? 0 : inp.jumpPressed ? 0.12 : h.buffer - dt;
   if (h.statue > 0 || h.swimming) { /* no jumping as a statue, and swimming is handled above */ }
-  else if (!h.pound && h.buffer > 0 && h.coyote > 0) { h.vy = (PH.jump + speed * PH.jumpRun) * (h.jumpMul || 1); h.onGround = false; h.coyote = 0; h.buffer = 0; G.ev.push({ t: 'jump' }); }
+  else if (!h.pound && h.buffer > 0 && h.coyote > 0) { h.vy = (PH.jump + speed * PH.jumpRun) * (h.jumpMul || 1) * (G.perks.feather ? 1.1 : 1); h.onGround = false; h.coyote = 0; h.buffer = 0; G.ev.push({ t: 'jump' }); }
+  else if (h.climbT > 0 && inp.jumpPressed) { h.vy = PH.jump * 0.9; h.vx = -(h.wallX || 0) * 7; h.vz = -(h.wallZ || 0) * 7; h.climbT = -0.25; h.buffer = 0; G.ev.push({ t: 'jump' }); }
   else if (!h.pound && inp.jumpPressed && !h.onGround && hasTail(h)) {
     // with the leaf: a full P-meter lets you fly; otherwise a wag of the tail slows the fall
     if (h.pm >= 1) { if (h.flyT <= 0) h.flyT = PH.flyTime; h.vy = PH.fly; G.ev.push({ t: 'fly' }); } else { h.wag = 0.32; G.ev.push({ t: 'wag' }); }
@@ -271,15 +347,21 @@ function stepHero(G, inp, dt) {
   }
   // the tail spin and fireballs (the run button)
   if (inp.runPressed && hasTail(h) && h.spin <= 0 && h.statue <= 0) { h.spin = 0.32; G.ev.push({ t: 'tail' }); h.spun = new Set(); }
-  if (inp.runPressed && h.power === POWER.FIRE && h.fireCd <= 0 && G.fire.length < 2) {
+  if (inp.runPressed && throwsFire(h) && h.fireCd <= 0 && G.fire.length < 2) {
     h.fireCd = 0.18; const fx = Math.sin(h.face), fz = Math.cos(h.face);
     G.fire.push({ x: h.x + h.w / 2 - 0.2 + fx * 0.6, y: h.y + h.h * 0.55, z: h.z + h.d / 2 - 0.2 + fz * 0.6, w: 0.4, h: 0.4, d: 0.4, vx: fx * 13, vz: fz * 13, vy: -3, life: 2.5 }); G.ev.push({ t: 'fire' });
   }
   // nobody flies off the top of the world
   if (h.y > L.h + 3 && h.vy > 0) h.vy = 0;
   h.prevY = h.y;
-  if (sweep(L, h, 'x', h.vx * dt)) h.vx = 0;
-  if (sweep(L, h, 'z', h.vz * dt)) h.vz = 0;
+  const hx = sweep(L, h, 'x', h.vx * dt); if (hx) h.vx = 0;
+  const hz = sweep(L, h, 'z', h.vz * dt); if (hz) h.vz = 0;
+  // the climbing suit: walking into a wall takes you straight up it (jump to leap off)
+  if (h.climbT < 0) h.climbT = Math.min(0, h.climbT + dt);
+  else if (climbs(h) && !h.swimming && !h.pound && h.statue <= 0 && want > 0.3 && (hx || hz) && h.climbT >= 0 && (hx || hz).t !== T.CLOUD) { h.climbT = 0.14; h.wallX = hx ? Math.sign(inp.mx) : 0; h.wallZ = hz ? Math.sign(inp.mz) : 0; }
+  else if (h.climbT > 0) h.climbT -= dt;
+  h.climbing = h.climbT > 0;
+  if (h.climbing) { if (h.vy < PH.climb) h.vy = PH.climb; h.pm = 0; h.flyT = 0; }
   const r = sweep(L, h, 'y', h.vy * dt), falling = h.vy <= 0;
   const was = h.onGround; h.onGround = false;
   if (r && falling) {
@@ -292,7 +374,7 @@ function stepHero(G, inp, dt) {
     } else if (!was && h.vy < -10) G.ev.push({ t: 'land' });
     h.vy = 0; h.onGround = true; h.floorT = r.t;
     if (r.t === T.NOTE || r.t === T.CAPBLUE) { h.vy = (inp.jump ? PH.noteHold : PH.note) * (r.t === T.CAPBLUE ? 1.15 : 1); h.onGround = false; G.ev.push({ t: 'note' }); G.ev.push({ t: 'bumpblock', x: r.x, y: r.y, z: r.z, down: true }); }
-  } else if (r && !falling) { h.vy = -0.5; hitBlock(G, r.x, r.y, r.z); }
+  } else if (r && !falling) { h.vy = -0.5; hitBlock(G, r.x, r.y, r.z); if (h.climbing) { h.climbT = -0.4; h.climbing = false; } }
   if (h.spin > 0) {
     // a spin of the tail all round you
     h.spin -= dt;
@@ -308,8 +390,10 @@ function stepHero(G, inp, dt) {
   for (let y = Math.floor(h.y); y <= Math.floor(h.y + h.h - 0.01); y++) for (let z = Math.floor(h.z); z <= Math.floor(h.z + h.d - 0.01); z++) for (let x = Math.floor(h.x); x <= Math.floor(h.x + h.w - 0.01); x++) {
     const t = tileAt(L, x, y, z);
     if (t === T.COIN) { setTile(G, x, y, z, T.EMPTY); G.coins++; G.ev.push({ t: 'coin', x, y, z }); }
-    else if (t === T.LAVA && h.y < y + 0.6) { if (!G.god) die(G); else { G.lava = true; h.vy = 16; } }
+    else if (t === T.LAVA && h.y < y + 0.6 && !lavaProof(h)) { if (G.god) { G.lava = true; h.vy = 16; } else if (G.perks.heart) { hurt(G); if (!h.dead) h.vy = 16; } else die(G); }
   }
+  // the rainbow fruit: coins close by fly to you
+  if (G.perks.fruit && !h.dead) for (let y = Math.floor(h.y) - 1; y <= Math.floor(h.y + h.h) + 1; y++) for (let z = Math.floor(h.z) - 2; z <= Math.floor(h.z) + 2; z++) for (let x = Math.floor(h.x) - 2; x <= Math.floor(h.x) + 2; x++) if (tileAt(L, x, y, z) === T.COIN) { setTile(G, x, y, z, T.EMPTY); G.coins++; G.ev.push({ t: 'coin', x, y, z, fly: true }); }
   if (h.y < -3 || (G.world && h.y < G.def.killY && !h.swimming)) { if (G.god) G.fell = true; die(G); }
   // the checkpoint
   if (!G.world && !G.checked && G.def.check && h.x > G.def.check[0]) { G.checked = true; G.ev.push({ t: 'check' }); }
@@ -339,6 +423,10 @@ export function step(G, inp, dt) {
     if (!e.alive || !e.active || (e.kind === 'plant' && !e.out) || !overlap(h, e)) continue;
     const fromAbove = h.vy <= 0.5 && h.prevY >= e.y + e.h * 0.4;
     if (h.statue > 0) continue;
+    if (e.kind === 'bubble' && !e.out) continue;
+    if (e.kind === 'ghost' || e.kind === 'jelly') { hurt(G); continue; }
+    if (e.kind === 'bubble') { if (lavaProof(h)) killEnemy(G, e, 'kick'); else hurt(G); continue; }
+    if ((e.kind === 'ram' || e.kind === 'penguin') && fromAbove) { h.vy = inp.jump ? PH.stompHold : PH.stomp; h.y = e.y + e.h; killEnemy(G, e, 'stomp'); continue; }
     if (e.kind === 'plant' || (e.kind === 'fish' && !fromAbove)) { hurt(G); continue; }
     if (e.kind === 'fish') { killEnemy(G, e, 'stomp'); h.vy = PH.stomp; continue; }
     if (e.spiny) { hurt(G); if (fromAbove) h.vy = PH.stomp * 0.6; continue; }
@@ -362,6 +450,8 @@ export function step(G, inp, dt) {
   for (const it of G.items) {
     it.t += dt;
     if (it.rise > 0) { it.rise -= dt; it.y += dt * 1.6; if (it.kind === 'secret' && it.rise <= 0) it.by = it.y; continue; }
+    if (it.kind === 'suit') { it.y = it.by + Math.sin(it.t * 2) * 0.12; if (it.cool > 0) it.cool -= dt; else if (!h.dead && overlap(h, it)) { it.cool = 1.5; const p = SUITS[it.suit].power; if (p !== h.power) { wear(G, p); G.ev.push({ t: 'suit', id: it.suit }); } } continue; }
+    if (it.kind === 'relic') { it.y = it.by + Math.sin(it.t * 2) * 0.15; if (!h.dead && overlap(h, it)) { it.gone = true; G.ev.push({ t: 'relic', id: it.id }); } continue; }
     if (it.kind === 'secret') { it.y = it.by + Math.sin(it.t * 2) * 0.15; if (!h.dead && overlap(h, it)) { it.gone = true; G.found[it.id] = true; G.ev.push({ t: 'secret', id: it.id }); } continue; }
     if (it.kind === 'leaf') { if (it.vy > 0) { it.vy -= 30 * dt; it.y += it.vy * dt; } else { it.y -= 1.3 * dt; it.x = it.bx + Math.sin(it.t * 3) * 1.1; } }
     else if (it.kind !== 'flower' && it.kind !== 'tanooki' && it.kind !== 'frog') {
@@ -383,7 +473,7 @@ export function step(G, inp, dt) {
     f.life -= dt; f.vy -= 50 * dt;
     if (sweep(G.L, f, 'x', f.vx * dt) || sweep(G.L, f, 'z', f.vz * dt)) { f.gone = true; G.ev.push({ t: 'puff', x: f.x, y: f.y, z: f.z }); }
     if (sweep(G.L, f, 'y', f.vy * dt)) f.vy = f.vy < 0 ? 8 : -1;
-    for (const e of G.enemies) if (!f.gone && e.alive && e.active && (e.kind !== 'plant' || e.out) && overlap(f, e)) { f.gone = true; killEnemy(G, e, 'fire'); }
+    for (const e of G.enemies) if (!f.gone && e.alive && e.active && e.kind !== 'bubble' && (e.kind !== 'plant' || e.out) && overlap(f, e)) { f.gone = true; killEnemy(G, e, 'fire'); }
     if (f.life <= 0 || f.y < -2) f.gone = true;
   }
   G.fire = G.fire.filter((f) => !f.gone);
@@ -398,7 +488,7 @@ export function step(G, inp, dt) {
   // shots: the king's fireballs, the prince's rings, cannon balls (which you can stomp)
   for (const s of G.shots) {
     s.x += s.vx * dt; s.z += s.vz * dt; s.t = (s.t || 0) + dt;
-    if (!h.dead && overlap(h, s)) { if (s.kind === 'ball' && h.vy <= 0.5 && h.prevY >= s.y + s.h * 0.4) { h.vy = inp.jump ? PH.stompHold : PH.stomp; G.ev.push({ t: 'stomp' }); } else if (h.statue <= 0) hurt(G); s.gone = true; }
+    if (!h.dead && overlap(h, s)) { if (s.kind === 'ball' && h.vy <= 0.5 && h.prevY >= s.y + s.h * 0.4) { h.vy = inp.jump ? PH.stompHold : PH.stomp; G.ev.push({ t: 'stomp' }); } else if (h.statue <= 0 && !(s.kind === 'fire' && lavaProof(h))) hurt(G); s.gone = true; }
     if (isSolid(tileAt(G.L, Math.floor(s.x + 0.3), Math.floor(s.y + 0.2), Math.floor(s.z + 0.3))) || s.t > 5) s.gone = true;
   }
   G.shots = G.shots.filter((s) => !s.gone);

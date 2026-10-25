@@ -1,4 +1,4 @@
-// LEAF LEAP 3D — Leafy Land as one open world, 576 × 576 blocks. In the middle-west lies the old heartland: Mushroom
+// LEAF LEAP 3D — Leafy Land as one open world, 816 × 816 blocks. In the middle-west lies the old heartland: Mushroom
 // Village, the meadows and hills, the mountain with its cave, the Lava Castle and Coral Bay, with every course of the
 // old world map set where it belongs (cloud stairs climb to the sky courses; the airship's stair appears when the
 // fortress falls). Around it: the Frostpeak snowfields to the north, the Giant Mushroom Forest to the north-east, the
@@ -6,8 +6,8 @@
 // with a lighthouse and a shipwreck. Hidden all over it are secret stars: on the tallest treetop and the highest peak,
 // inside invisible blocks, under an X you must ground-pound, behind cracked brick walls, at the end of sets of eight
 // red coins, down unmarked pipes, under the sea. Old stone tablets whisper riddles about where to look.
-import { T } from './game.js?v=7';
-import { LEVELS } from './levels.js?v=7';
+import { T, SUITS } from './game.js?v=8';
+import { LEVELS } from './levels.js?v=8';
 
 // everything sits Y0 blocks up, so the sea has room to be deep and the tallest mountain room to be ten times taller
 export const Y0 = 112, W = 816, D = 816, H = 368, GY = 17 + Y0, SEA = 16 + Y0;   // you stand at y = GY on flat land; water fills up to y = SEA
@@ -436,6 +436,111 @@ export function buildWorld() {
   }
   for (const id of LAND_ORDER) { const [x, z] = W0.places[id], b = surf(x, z); clearAbove(x, z, x + 1, z + 1, b); const under = get(x, b - 1, z); fill(x - 1, b - 1, z - 1, x + 2, b - 1, z + 2, under === T.WATER || under === T.EMPTY ? T.SAND : under); pipe(x, z, b, 2, { kind: 'home', region: id }); W0.signs.push({ x: x + 1, y: b + 2.6, z: z + 1, text: LANDS[id].name, id }); W0.checks.push({ x: x - 1, y: b, z: z + 3, z0: z - 4, z1: z + 6, region: id, start: true }); }
 
+  // ---------------------------------------------------------------- suit shrines: a little pavilion with a golden roof, and a suit floating in the middle
+  W0.suits = []; W0.relics = [];
+  const shrine = (id, x, z, pier) => {
+    const g = pier ? Math.max(surf(x, z), SEA + 1) : surf(x, z);
+    // a level terrace round it, stepping down to the land on every side
+    for (let dz = -9; dz <= 9; dz++) for (let dx = -9; dx <= 9; dx++) {
+      const d = Math.max(Math.abs(dx), Math.abs(dz)), X = x + dx, Z = z + dz, ts = surf(X, Z), want = d <= 5 ? g : ts > g ? Math.min(ts, g + d - 5) : Math.max(ts, g - (d - 5));
+      if (ts > want) { const top = get(X, ts - 1, Z); fill(X, want, Z, X, Math.min(H - 1, ts + 12), Z, T.EMPTY); if (top !== T.LEAVES && top !== T.LOG) set(X, want - 1, Z, top); }
+      else if (ts < want && (!pier || d <= 3)) { const top = get(X, ts - 1, Z); fill(X, ts, Z, X, want - 1, Z, T.STONE); if (top !== T.WATER && top !== T.LEAVES) set(X, want - 1, Z, top); }
+    }
+    fill(x - 3, pier ? Y0 : g - 4, z - 3, x + 3, g - 1, z + 3, T.STONE); fill(x - 2, g - 1, z - 2, x + 2, g - 1, z + 2, T.SANDSTONE);
+    fill(x - 3, g, z - 3, x + 3, Math.min(H - 1, g + 14), z + 3, T.EMPTY);
+    for (const [dx, dz] of [[-3, -3], [3, -3], [-3, 3], [3, 3]]) fill(x + dx, g, z + dz, x + dx, g + 3, z + dz, T.WALL);
+    for (let k = 0; k < 3; k++) fill(x - 3 + k, g + 4 + k, z - 3 + k, x + 3 - k, g + 4 + k, z + 3 - k, T.CAPGOLD);
+    W0.suits.push({ id, x, y: g, z, locked: id === 'gold' }); W0.signs.push({ x: x + 0.5, y: g + 8.4, z: z + 0.5, text: SUITS[id].name });
+    reserve(x - 5, z - 5, x + 5, z + 5); return g;
+  };
+  shrine('leaf', W0.places.forest[0] + 12, W0.places.forest[1] + 14);
+  shrine('frog', 176, 338, true);
+  shrine('lava', VOLC[0] - 24, VOLC[1] - 32);
+  shrine('climb', W0.places.peak[0] - 8, W0.places.peak[1] + 16);
+  shrine('tanooki', TOWN[0] + 22, TOWN[1] + 2);
+  hint(61, 276, '葉葉國各地有套裝神殿：森林有葉子套裝、珊瑚海岸有青蛙套裝、火山腳下有岩漿套裝、天梯峰下有登山套裝、沙漠小鎮有狸貓套裝。拿到以後隨時按 R 換穿！', 'Suit shrines stand around Leafy Land: the Leaf Suit in the forest, the Frog Suit on the Coral Coast, the Lava Suit below Mount Ember, the Climbing Suit at the foot of Skyreach Peak, the Tanooki Suit in the desert town. Once found, press R to change any time!');
+
+  // ---------------------------------------------------------------- the Mystery Gate in the village: sealed until all five mysterious treasures are found
+  { const g = GY; fill(37, Y0, 256, 47, g - 1, 268, T.STONE); fill(37, g, 256, 47, g + 9, 268, T.EMPTY);
+    fill(38, g, 257, 46, g + 5, 267, T.BASALT); fill(39, g, 258, 45, g + 4, 266, T.EMPTY);
+    for (let k = 0; k < 4; k++) fill(37 + k, g + 6 + k, 256 + k, 47 - k, g + 6 + k, 268 - k, T.ROOF);
+    const door = []; for (let y = g; y <= g + 3; y++) for (let z = 261; z <= 263; z++) { set(46, y, z, T.HARD); door.push([46, y, z]); }
+    const lamps = []; for (let i = 0; i < 5; i++) lamps.push([46, g + 4, 260 + i]);
+    W0.gate = { door, lamps }; W0.suits.push({ id: 'gold', x: 41, y: g, z: 262, locked: true });
+    W0.signs.push({ x: 47.4, y: g + 7.4, z: 262.5, text: B('神秘之門', 'The Mystery Gate') });
+    hint(49, 266, '神秘之門：五件神秘寶物到齊，門就會打開。寶物藏在熔岩神殿、鷹之巢、人魚洞窟、天空花園和幽靈古宅。', 'The Mystery Gate: it opens when all five mysterious treasures are found. They lie in the Lava Temple, the Eagle’s Eyrie, the Mermaid Grotto, the Sky Garden and the Haunted Manor.');
+    reserve(35, 254, 49, 270); }
+
+  // ---------------------------------------------------------------- mysterious places, each with its treasure
+  // the Lava Temple: the crater lake is deep, and at its bottom a golden temple glows (only the lava suit swims there)
+  { const [vx, vz] = VOLC;
+    for (let z = vz - 12; z <= vz + 12; z++) for (let x = vx - 12; x <= vx + 12; x++) { const d = Math.hypot(x - vx, z - vz); if (d < 11 && !(Math.abs(x - vx) <= 1 && Math.abs(z - vz) <= 1)) { set(x, GY + 11, z, T.BASALT); fill(x, GY + 12, z, x, GY + 26, z, T.LAVA); } }
+    const tx = vx + 6, tz = vz; for (const [dx, dz] of [[-2, -2], [2, -2], [-2, 2], [2, 2]]) fill(tx + dx, GY + 12, tz + dz, tx + dx, GY + 16, tz + dz, T.HARD);
+    fill(tx - 2, GY + 17, tz - 2, tx + 2, GY + 17, tz + 2, T.CAPGOLD); set(tx, GY + 18, tz, T.CAPGOLD);
+    W0.relics.push({ id: 'heart', x: tx, y: GY + 12, z: tz });
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2 + 0.3; W0.ents.push({ t: 'l', x: Math.round(vx + Math.cos(a) * 8.5), y: GY + 26, z: Math.round(vz + Math.sin(a) * 8.5), region: 'volcano' }); }
+    hint(vx - 14, vz + 12, '火山口的岩漿底下，有一座發光的神殿。只有穿岩漿套裝才游得下去。', 'Deep under the lava in the crater a temple glows. Only the Lava Suit can swim down to it.');
+    W0.regions.push({ id: 'lavatemple', name: B('熔岩神殿', 'The Lava Temple'), theme: 'cave', sky: 'molten', box: [vx - 11, GY + 11, vz - 11, vx + 12, GY + 26, vz + 12] });
+    const c = W0.castle; for (let k = 0; k < 6; k++) W0.ents.push({ t: 'l', x: k < 3 ? c.x0 - 3 : c.x1 + 3, y: GY - 1, z: c.z0 + 6 + (k % 3) * 9, region: 'castle' }); }
+  // the Eagle's Eyrie: a sheer pillar of rock with a nest on top; no path leads up, only a climber gets there
+  { const ex = 612, ez = 466, g = surf(ex, ez), top = g + 64, sq = (x, z) => Math.abs(x) <= 3 && Math.abs(z) <= 3 && !(Math.abs(x) === 3 && Math.abs(z) === 3);
+    for (let y = g - 3; y < top; y++) for (let z = -3; z <= 3; z++) for (let x = -3; x <= 3; x++) if (sq(x, z)) set(ex + x, y, ez + z, T.STONE);
+    for (let z = -3; z <= 3; z++) for (let x = -3; x <= 3; x++) { if (!sq(x, z)) continue; const rim = Math.abs(x) === 3 || Math.abs(z) === 3 || (Math.abs(x) === 2 && Math.abs(z) === 2); set(ex + x, top, ez + z, rim ? T.LOG : T.LEAVES); if (rim) set(ex + x, top + 1, ez + z, T.LOG); }
+    fill(ex - 3, top + 2, ez - 3, ex + 3, H - 1, ez + 3, T.EMPTY);
+    W0.relics.push({ id: 'feather', x: ex, y: top + 1, z: ez });
+    hint(ex - 8, ez + 7, '鷹之巢：這根石柱沒有路可以上去，只有會爬牆的人才到得了頂。', 'The Eagle’s Eyrie: no path climbs this pillar of rock. Only a climber can reach the top.');
+    for (let k = 0; k < 4; k++) { const x = ex - 12 + k * 7, z = ez + 14; W0.ents.push({ t: 'r', x, y: surf(x, z), z, region: 'peak', skin: 'snow' }); }
+    reserve(ex - 9, ez - 9, ex + 9, ez + 9);
+    W0.regions.push({ id: 'eyrie', name: B('鷹之巢', 'The Eagle’s Eyrie'), theme: 'sky', sky: 'snow', box: [ex - 6, top - 3, ez - 6, ex + 7, H, ez + 7] }); }
+  // the Mermaid Grotto: a dome of coral on the floor of the abyss, entered through a hole in its top
+  { const gx = 250, gz = 742, bed = surf(gx, gz), cy = bed + 3, corals = [T.CAPBLUE, T.ROOF, T.CAPGOLD, T.STEM];
+    for (let y = -4; y <= 8; y++) for (let z = -8; z <= 8; z++) for (let x = -8; x <= 8; x++) {
+      const d = Math.hypot(x, z, y * 1.1), X = gx + x, Y = cy + y, Z = gz + z;
+      if (d < 6.2) set(X, Y, Z, Y < bed ? T.SAND : T.WATER);
+      else if (d < 7.3 && Y >= bed - 1 && !(y > 4 && Math.abs(x) < 3 && Math.abs(z) < 3)) set(X, Y, Z, corals[Math.abs(x * 7 + z * 3 + y * 5) % 4]);
+    }
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; set(Math.round(gx + Math.cos(a) * 4), bed, Math.round(gz + Math.sin(a) * 4), T.STEM); set(Math.round(gx + Math.cos(a + 0.5) * 3), bed + 1, Math.round(gz + Math.sin(a + 0.5) * 3), T.COIN); }
+    W0.relics.push({ id: 'pearl', x: gx, y: bed, z: gz });
+    for (let k = 0; k < 6; k++) { const a = k / 6 * Math.PI * 2; W0.ents.push({ t: 'j', x: Math.round(gx + Math.cos(a) * 11), y: cy + 6 + (k % 3) * 4, z: Math.round(gz + Math.sin(a) * 11), region: 'abyss' }); }
+    const dk = COURSES['1-D']; hint(dk.ox + 25, dk.oz + 5, '人魚洞窟在這裡往西的最深海底。沒有青蛙套裝的話，氣會不夠用。', 'The Mermaid Grotto lies on the deepest sea floor, west of here. Without the Frog Suit you will run out of air.');
+    reserve(gx - 9, gz - 9, gx + 9, gz + 9);
+    W0.regions.push({ id: 'grotto', name: B('人魚洞窟', 'The Mermaid Grotto'), theme: 'water', box: [gx - 8, bed - 4, gz - 8, gx + 9, cy + 9, gz + 9] }); }
+  // the Sky Garden: a floating island high above the southern sea; fly up to it from the lighthouse beach
+  { const sx = 120, sz = 438, sy = GY + 36;
+    for (let z = -10; z <= 10; z++) for (let x = -10; x <= 10; x++) { const d = Math.hypot(x, z * 1.1); if (d > 9.5) continue; const depth = Math.round((9.5 - d) * 0.8) + 1; for (let k = 0; k < depth; k++) set(sx + x, sy - 1 - k, sz + z, k === 0 ? T.GROUND : T.STONE); }
+    tree(sx - 5, sz - 3, 'oak', sy); tree(sx + 5, sz + 4, 'oak', sy);
+    for (let k = 0; k < 12; k++) { const a = k / 12 * Math.PI * 2; set(Math.round(sx + Math.cos(a) * 6), sy + 1, Math.round(sz + Math.sin(a) * 6), T.COIN); }
+    for (let k = 0; k < 8; k++) { const a = k / 8 * Math.PI * 2 + 0.2, x = Math.round(sx + Math.cos(a) * 3.5), z = Math.round(sz + Math.sin(a) * 3.5); if (get(x, sy, z) === T.EMPTY) set(x, sy, z, [T.ROOF, T.CAPGOLD, T.CAPBLUE][k % 3]); }
+    W0.relics.push({ id: 'fruit', x: sx, y: sy, z: sz });
+    const [lx, lz] = ISLES[0]; hint(lx + 7, lz - 7, '燈塔北邊的天上有一座花園。穿葉子套裝在沙灘上跑滿 P，一路往上飛！', 'A garden floats in the sky north of the lighthouse. In the Leaf Suit, run on the beach until the P-meter fills, then fly all the way up!');
+    reserve(sx - 11, sz - 11, sx + 11, sz + 11);
+    W0.regions.push({ id: 'garden', name: B('天空花園', 'The Sky Garden'), theme: 'sky', box: [sx - 11, sy - 12, sz - 11, sx + 12, sy + 20, sz + 12] }); }
+  // the Haunted Manor: a dark house of three floors in the snowfields, full of shy ghosts; its treasure is behind a cracked wall at the top
+  { let best = null; for (let z = 30; z <= 84; z += 3) for (let x = 296; x <= 334; x += 3) { if (reserved[(z + 8) * W + x + 10]) continue; let sum = 0; for (let dz = 0; dz <= 16; dz += 4) for (let dx = 0; dx <= 20; dx += 4) sum += Math.abs(heightMap[(z + dz) * W + x + dx] - GY - 2); if (!best || sum < best.sum) best = { x, z, sum }; }
+    const x0 = best.x, z0 = best.z, x1 = x0 + 20, z1 = z0 + 16, b = GY + 2, mx = x0 + 10;
+    fill(x0 - 3, Y0, z0 - 3, x1 + 3, b - 1, z1 + 9, T.STONE); fill(x0 - 3, b, z0 - 3, x1 + 3, H - 1, z1 + 9, T.EMPTY); fill(x0 - 3, b - 1, z0 - 3, x1 + 3, b - 1, z1 + 9, T.GROUND);
+    fill(x0, b, z0, x1, b + 14, z1, T.BASALT); fill(x0 + 1, b, z0 + 1, x1 - 1, b + 13, z1 - 1, T.EMPTY); fill(x0 + 1, b - 1, z0 + 1, x1 - 1, b - 1, z1 - 1, T.PLANK);
+    for (const f of [1, 2]) fill(x0 + 1, b + f * 5 - 1, z0 + 1, x1 - 1, b + f * 5 - 1, z1 - 1, T.PLANK);
+    for (let k = 0; k < 6; k++) fill(x0 - 1 + k, b + 14 + k, z0 - 1 + k, x1 + 1 - k, b + 14 + k, z1 + 1 - k, T.ROOF);
+    fill(mx - 1, b, z1, mx + 1, b + 2, z1, T.EMPTY);
+    for (const f of [0, 1, 2]) for (const wx of [x0 + 3, x1 - 4]) fill(wx, b + f * 5 + 1, z1, wx + 1, b + f * 5 + 2, z1, f ? T.CAPGOLD : T.EMPTY);
+    for (const f of [1, 2]) for (const wz of [z0 + 5, z1 - 6]) { fill(x0, b + f * 5 + 1, wz, x0, b + f * 5 + 2, wz + 1, T.CAPGOLD); fill(x1, b + f * 5 + 1, wz, x1, b + f * 5 + 2, wz + 1, T.CAPGOLD); }
+    fill(x1 - 4, b + 15, z0 + 3, x1 - 3, b + 22, z0 + 4, T.BRICK);
+    const stairs = (f, dir) => { const y = b + f * 5, s0 = dir > 0 ? x0 + 3 : x1 - 3; for (let k = 0; k < 5; k++) { const x = s0 + dir * k; fill(x, y, z0 + 1, x, y + k, z0 + 2, T.PLANK); if (k < 4) fill(x, y + 4, z0 + 1, x, y + 4, z0 + 2, T.EMPTY); } };
+    stairs(0, 1); stairs(1, -1);
+    const y2 = b + 10; fill(x0 + 6, y2, z0 + 1, x0 + 6, y2 + 3, z1 - 1, T.BASALT); fill(x0 + 6, y2, z0 + 7, x0 + 6, y2 + 1, z0 + 9, T.BRICK);
+    W0.relics.push({ id: 'key', x: x0 + 3, y: y2, z: z0 + 8 });
+    for (const f of [0, 1, 2]) for (let i = 0; i < 6; i++) set(x0 + 8 + i * 2, b + f * 5, z0 + 9 + (i % 2) * 2, T.COIN);
+    for (const [f, dx, dz] of [[0, 4, 10], [0, 12, 6], [0, 16, 12], [1, 6, 10], [1, 12, 12], [1, 16, 6], [2, 10, 10], [2, 15, 12]]) W0.ents.push({ t: 'h', x: x0 + dx, y: b + f * 5 + 1, z: z0 + dz, region: 'manor' });
+    W0.signs.push({ x: mx + 0.5, y: b + 4.2, z: z1 + 0.8, text: B('幽靈古宅', 'The Haunted Manor') });
+    hint(mx + 4, z1 + 3, '幽靈古宅：背對幽靈時它們會靠過來，轉身看著它們就會停下。頂樓有一面裂開的磚牆，用尾巴甩開它。', 'The Haunted Manor: ghosts creep closer while your back is turned and freeze when you look at them. A cracked brick wall on the top floor: swing your tail at it.');
+    reserve(x0 - 4, z0 - 4, x1 + 4, z1 + 10);
+    W0.regions.push({ id: 'manor', name: B('幽靈古宅', 'The Haunted Manor'), theme: 'fort', sky: 'ghost', box: [x0, b - 1, z0, x1 + 1, b + 15, z1 + 1] }); }
+  // penguins on the frozen lake, jellyfish in the deep sea and down the trench
+  { const [lx, lz] = LAKE; for (let k = 0; k < 6; k++) W0.ents.push({ t: 'n', x: lx - 15 + k * 6, y: GY, z: lz + (k % 2 ? 6 : -6), region: 'snow' });
+    for (let i = 0; i < 400 && W0.ents.filter((e) => e.t === 'j').length < 70; i++) { const x = 40 + Math.floor(rnd() * 740), z = 600 + Math.floor(rnd() * 200), bed = surf(x, z), y = Math.round(bed + 4 + rnd() * Math.max(1, SEA - bed - 12)); if (get(x, y, z) === T.WATER && get(x, y + 2, z) === T.WATER && get(x, y - 2, z) === T.WATER && !reserved[z * W + x]) W0.ents.push({ t: 'j', x, y, z, region: 'abyss' }); }
+    const c = COURSES['1-D'], cx = c.ox + 20, cz = c.oz + 20; for (let k = 0; k < 9; k++) { const a = k * 2.1; W0.ents.push({ t: 'j', x: Math.round(cx + Math.cos(a) * 5), y: SEA - 14 - k * 10, z: Math.round(cz + Math.sin(a) * 5), region: '1-D' }); } }
+
   // ---------------------------------------------------------------- trees, cacti, coins and wandering baddies across the open land
   const bio = (x, z) => BIOME[biome[z * W + x]];
   for (let i = 0; i < 5200; i++) {
@@ -450,7 +555,7 @@ export function buildWorld() {
     if (b === 'forest' && rnd() < 0.4) continue;
     tree(x, z, 'oak', g);
   }
-  const KINDS = { peak: ['g', 's', 'w', 'k', 'b'], abyss: ['k'], core: ['g', 'g', 'k', 'w', 'g'], snow: ['g', 's', 'k', 'w', 's'], forest: ['g', 'k', 'w', 'g', 'k'], desert: ['c', 'c', 'g', 's', 'k'], volcano: ['s', 'g', 'b', 's', 'k'], isles: ['k', 'g'] };
+  const KINDS = { peak: ['g', 'r', 'w', 'k', 'r', 'b', 'r'], abyss: ['k'], core: ['g', 'g', 'k', 'w', 'g'], snow: ['g', 'n', 'k', 'w', 's', 'n', 'r'], forest: ['g', 'k', 'w', 'g', 'k'], desert: ['c', 'c', 'g', 's', 'k'], volcano: ['s', 'g', 'b', 's', 'k'], isles: ['k', 'g'] };
   for (let i = 0; i < 1050; i++) {
     const x = 10 + Math.floor(rnd() * (W - 20)), z = 10 + Math.floor(rnd() * (D - 20)), g = surf(x, z), b = bio(x, z);
     if (reserved[z * W + x] || g <= SEA + 1 || g > Y0 + 42 || get(x, g, z) !== T.EMPTY) continue;

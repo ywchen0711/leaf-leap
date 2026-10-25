@@ -60,6 +60,10 @@ export class Sound {
       case 'click': this.tone(t, 800, 0.04, 'square', 0.04); break;
       case 'deny': this.tone(t, 180, 0.15, 'square', 0.05, 140); break;
       case 'card': this.seq(t, [1047, 1319, 1568, 2093], 0.06, 'square', 0.06); break;
+      case 'suit': this.seq(t, [784, 988, 1175, 1568], 0.045, 'triangle', 0.08); this.noise(t, 0.25, 5000, 0.05, 'highpass'); break;
+      case 'relic': this.seq(t, [523, 659, 784, 1047, 1319, 1568, 2093], 0.07, 'triangle', 0.09); this.seq(t + 0.02, [1047, 0, 1568, 0, 2093], 0.07, 'square', 0.03); break;
+      case 'ram': this.tone(t, 330, 0.12, 'sawtooth', 0.05, 280); this.tone(t + 0.13, 300, 0.25, 'sawtooth', 0.05, 250); break;
+      case 'slide': this.noise(t, 0.5, 2500, 0.08, 'bandpass'); this.tone(t, 900, 0.3, 'triangle', 0.04, 500); break;
       case 'fanfare': this.seq(t, [523, 523, 523, 659, 0, 587, 659, 0, 784, 784, 1047], 0.12, 'square', 0.07); break;
     }
   }
